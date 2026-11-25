@@ -1,0 +1,1 @@
+export function overlap(a,b){return a.place===b.place?Math.max(0,Math.min(a.end,b.end)-Math.max(a.start,b.start)+1):0} export function findMatches(events,people){return people.map(p=>({...p,years:Math.max(0,...events.map(e=>overlap(e,p)))})).filter(p=>p.years>0).sort((a,b)=>b.years-a.years)}
