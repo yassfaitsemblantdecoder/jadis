@@ -1,4 +1,4 @@
-name: Publish fictional demo
+name: Publish Jadis
 on:
   workflow_dispatch:
   push:
