@@ -1,5 +1,3 @@
-# Jadis.
+# Jadis — constellation scolaire
 
-On s’est déjà croisés.
-
-Prototype cloud de reconnexion sociale. Données fictives uniquement jusqu’à la mise en place de l’authentification et des permissions.
+Prototype cloud, sans dépendance, données fictives exclusivement. L'interface principale est un graphe SVG interactif : établissements, années, anciens élèves. Les périodes sont des années civiles inclusives pour cette démo ; une prochaine version modélisera les années scolaires et classes réelles. Aucun compte, contact ou stockage réel. Déploiement statique via Vercel. Tests du matching : npm test.
