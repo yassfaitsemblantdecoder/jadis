@@ -1,0 +1,30 @@
+-- Apply in a new Supabase project. No real data is seeded.
+begin;
+create table public.schools(id text primary key, name text not null, city text, kind text);
+create table public.profiles(id uuid primary key references auth.users(id) on delete cascade, display_name text not null check(char_length(display_name) between 1 and 80), discoverable boolean not null default false);
+create table public.classes(id uuid primary key default gen_random_uuid(), school_id text not null references public.schools(id), school_year int not null check(school_year between 1900 and 2100), level text not null, section text not null default '', unique(school_id,school_year,level,section));
+create table public.memberships(user_id uuid references public.profiles(id) on delete cascade, class_id uuid references public.classes(id) on delete cascade, discoverable boolean not null default false, primary key(user_id,class_id));
+create table public.teacher_notes(id uuid primary key default gen_random_uuid(), user_id uuid not null references public.profiles(id) on delete cascade, class_id uuid not null references public.classes(id) on delete cascade, teacher_name text not null check(char_length(teacher_name)<=100), subject text);
+create table public.blocks(owner uuid references public.profiles(id) on delete cascade, target uuid references public.profiles(id) on delete cascade, primary key(owner,target), check(owner<>target));
+create table public.connection_requests(id uuid primary key default gen_random_uuid(), sender uuid not null references public.profiles(id) on delete cascade, recipient uuid not null references public.profiles(id) on delete cascade, status text not null default 'pending' check(status in ('pending','accepted','declined')), unique(sender,recipient), check(sender<>recipient));
+create table public.reports(id uuid primary key default gen_random_uuid(), reporter uuid not null references public.profiles(id) on delete cascade, target uuid references public.profiles(id) on delete set null, reason text not null check(char_length(reason) between 1 and 2000), created_at timestamptz default now());
+alter table public.schools enable row level security;
+alter table public.profiles enable row level security;
+alter table public.classes enable row level security;
+alter table public.memberships enable row level security;
+alter table public.teacher_notes enable row level security;
+alter table public.blocks enable row level security;
+alter table public.connection_requests enable row level security;
+alter table public.reports enable row level security;
+create policy schools_read on public.schools for select to authenticated using(true);
+create policy classes_read on public.classes for select to authenticated using(true);
+create policy classes_create on public.classes for insert to authenticated with check(true);
+create policy own_profile on public.profiles for all to authenticated using(id=auth.uid()) with check(id=auth.uid());
+create policy own_membership on public.memberships for all to authenticated using(user_id=auth.uid()) with check(user_id=auth.uid());
+create policy own_notes on public.teacher_notes for all to authenticated using(user_id=auth.uid()) with check(user_id=auth.uid());
+create policy own_blocks on public.blocks for all to authenticated using(owner=auth.uid()) with check(owner=auth.uid());
+create policy requests_read on public.connection_requests for select to authenticated using(sender=auth.uid() or recipient=auth.uid());
+create policy reports_create on public.reports for insert to authenticated with check(reporter=auth.uid());
+-- Cross-user discovery and contact writes deliberately unavailable until reviewed RPCs exist.
+revoke all on all tables in schema public from anon;
+commit;
