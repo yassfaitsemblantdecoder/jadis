@@ -1,0 +1,16 @@
+begin;
+create table public.beta_members(user_id uuid primary key references auth.users(id) on delete cascade);
+alter table public.beta_members enable row level security;
+revoke all on public.beta_members from anon,authenticated;
+grant select on public.beta_members to authenticated;
+create policy beta_self on public.beta_members for select to authenticated using(user_id=auth.uid());
+create policy beta_profile_gate on public.profiles as restrictive for all to authenticated using(exists(select 1 from public.beta_members where user_id=auth.uid())) with check(exists(select 1 from public.beta_members where user_id=auth.uid()));
+create policy beta_journey_gate on public.journeys as restrictive for all to authenticated using(exists(select 1 from public.beta_members where user_id=auth.uid())) with check(exists(select 1 from public.beta_members where user_id=auth.uid()));
+grant select,insert,update,delete on public.profiles,public.journeys to authenticated;
+grant select on public.schools to authenticated;
+create table public.beta_school_entries(id uuid primary key default gen_random_uuid(),user_id uuid not null references public.profiles(id) on delete cascade, directory_id text not null check(char_length(directory_id) between 1 and 150),school_name text not null check(char_length(school_name) between 1 and 300), city text not null default '' check(char_length(city)<=150),year integer not null check(year between 1900 and 2100),level text not null default '' check(char_length(level)<=80),section text not null default '' check(char_length(section)<=30), unique(user_id,directory_id,year,level,section));
+alter table public.beta_school_entries enable row level security;
+revoke all on public.beta_school_entries from anon,authenticated;
+grant select,insert,update,delete on public.beta_school_entries to authenticated;
+create policy beta_own_entries on public.beta_school_entries for all to authenticated using(user_id=auth.uid() and exists(select 1 from public.beta_members where user_id=auth.uid())) with check(user_id=auth.uid() and exists(select 1 from public.beta_members where user_id=auth.uid()));
+commit;
