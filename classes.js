@@ -1,4 +1,4 @@
-export const levels=['PS','MS','GS','CP','CE1','CE2','CM1','CM2','6e','5e','4e','3e','2de','1re','Terminale','Autre'];
+export const levels=['PS','MS','GS','CP','CE1','CE2','CM1','CM2','6e','5e','4e','3e','2de','1re','Terminale','BTS 1','BTS 2','BUT 1','BUT 2','BUT 3','L1','L2','L3','M1','M2','Doctorat','Prépa 1','Prépa 2','Ingénieur 1','Ingénieur 2','Ingénieur 3','Autre'];
 export function makeClass(school,year,level,section=''){year=Number(year);section=section.trim().normalize('NFKC').toUpperCase().replace(/\s+/g,' ');if(!school||!Number.isInteger(year)||year<1900||year>new Date().getFullYear()||!levels.includes(level)||section.length>30)throw new Error('Classe invalide');return {id:JSON.stringify([school,year,level,section]),school,year,level,section,label:level+(section?' '+section:' · section inconnue'),academicYear:year+'–'+(year+1)}}
 export function joinClass(classes,joined,c){if(!classes.some(x=>x.id===c.id))classes.push(c);joined.add(c.id);return c}
 export function classMatch(a,b){if(a.school!==b.school||a.year!==b.year||a.level!==b.level)return 'none';if(!a.section||!b.section)return 'cohort';return a.section===b.section?'class':'cohort'}
