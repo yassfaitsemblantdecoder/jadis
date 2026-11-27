@@ -1,0 +1,7 @@
+[
+  {"identifiant_de_l_etablissement":"0000001a","nom_etablissement":"École fictive"},
+  {"identifiant_de_l_etablissement":"0000001A","nom_etablissement":"École fictive"},
+  {"identifiant_de_l_etablissement":"0000002B","nom_etablissement":"École fictive","nom_commune":"Commune A"},
+  {"identifiant_de_l_etablissement":"0000002B","nom_etablissement":"École fictive","nom_commune":"Commune B"},
+  {"identifiant_de_l_etablissement":"inconnu","nom_etablissement":"Fictif"}
+]

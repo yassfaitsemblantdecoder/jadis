@@ -19,3 +19,19 @@ Les trois catalogues déclarent la Licence Ouverte v2.0. Lors de la réutilisati
 - Préférer les exports avec projection des seuls champs nécessaires. Conserver pour chaque import la source, la date publiée, l’empreinte du contenu et les décomptes.
 - Préparer les enregistrements hors des tables principales. Dédupliquer les lignes équivalentes et isoler les conflits à examiner. Conserver les identifiants avec leur namespace et conserver les rapprochements d’alias incertains pour revue.
 - Tester qu’une relance du même export ne crée ni doublons ni modifications inutiles. Vérifier la reprise après interruption et le traitement d’un changement de schéma avant d’activer un import régulier.
+
+## Import en zone de préparation
+
+La migration 008 ajoute des lots privés, des candidats et une file de rejet. Chaque lot conserve le catalogue, l’éditeur, la date officielle de mise à jour, l’empreinte SHA-256 du fichier JSON exact et les décomptes. Une relance simultanée ou répétée du même fichier, pour la même source et date, ne crée qu’un lot. L’écriture du lot et de ses lignes est atomique.
+
+`bash scripts/directory-stage-sql.sh SOURCE fichier.json --published-at DATE_ISO --publisher EDITEUR` produit une transaction. Pour les validations, utiliser le banc jetable `bash scripts/test-db.sh --rest`, qui charge trois exports fictifs, vérifie la relance concurrente et restaure la base. Le SQL généré par le script est destiné à une base équipée de la migration 008. Aucun accès à Supabase distant n’est nécessaire au test.
+
+Sur les exports officiels du 27 novembre 2026, la préparation en mémoire a donné les résultats suivants.
+
+| Source | Candidats | Revue ou rejet |
+| --- | ---: | --- |
+| Annuaire de l’éducation | 68 383 | 1 doublon équivalent écarté, 163 lignes en conflit d’identifiant et 1 champ invalide. |
+| Établissements fermés | 42 810 | Tous à revoir, car aucun nom exploitable dans les champs projetés. La date et l’UAI restent disponibles. |
+| Enseignement supérieur | 245 | Type éventuellement multivalué normalisé. L’identifiant Paysage est conservé lorsque l’UAI ne peut servir de clé. |
+
+La zone de préparation n’écrit ni dans le modèle canonique ni dans la bêta. Pour promouvoir les candidats, valider les noms manquants, les conflits, les alias d’anciens codes et les rapprochements entre sources. Les lignes rejetées conservent leur numéro et leur raison afin de relire le fichier d’origine. Le retour d’un lot avant promotion consiste à le retirer avec ses lignes en base isolée, après conservation des preuves nécessaires.

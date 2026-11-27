@@ -23,11 +23,11 @@ L’année désigne la rentrée de l’année scolaire. Une période civile de `
 
 ## ARCH-02 et sécurité
 
-Exécuter `bash scripts/test-db.sh`. Le script crée un PostgreSQL 16 sans port publié, sans réseau et avec un stockage temporaire. Il charge les migrations dans l’ordre, exécute les assertions avec des comptes fictifs, puis restaure le schéma dans une seconde base et rejoue les mêmes assertions. La CI propose le même contrôle sur les branches et PR.
+Exécuter `bash scripts/test-db.sh`. Le script crée un PostgreSQL 16 sans port publié, sans réseau et avec un stockage temporaire. Il charge les migrations dans l’ordre, exécute les assertions avec des comptes fictifs, puis restaure le schéma et les lots d’annuaire fictifs dans une seconde base et rejoue les mêmes assertions. La CI propose le même contrôle sur les branches et PR.
 
 Les assertions couvrent les permissions du rôle anonyme, le cloisonnement des tables canoniques, la visibilité limitée au propriétaire, l’utilisateur hors bêta, l’absence de correspondance sans scolarité commune ou sans consentement, le blocage dans les deux sens et la suppression des déclarations avec le compte. Elles vérifient aussi le refus d’une déclaration dupliquée sans classe et le rattachement d’une classe à son établissement.
 
-Le banc reproduit les tables et la fonction d’identité PostgreSQL nécessaires aux migrations. L’étape Supabase de bout en bout devra tester Auth, la vérification d’email, l’exposition PostgREST, les droits par défaut du projet, les paramètres de session et les workflows de reconnexion et de messagerie. Les limites de débit et les opérations concurrentes réclament des scénarios dédiés. La restauration testée porte sur le schéma et les assertions, avant toute validation de la restauration des données ou du service complet.
+Le banc reproduit les tables et la fonction d’identité PostgreSQL nécessaires aux migrations. Avec `--rest`, un PostgREST isolé vérifie l’exposition du schéma public, les rôles anonyme et authentifié, la découverte, l’acceptation d’une reconnexion, la messagerie et le blocage. Les jetons de test sont signés localement. L’étape Supabase de bout en bout devra encore couvrir Auth, les emails, la révocation de session, les droits par défaut du projet et la restauration du service complet. Les limites de débit et les opérations concurrentes de reconnexion réclament des scénarios dédiés.
 
 ## Architecture et exploitation
 

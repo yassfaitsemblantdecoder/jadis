@@ -1,0 +1,25 @@
+# Contrôles avant un pilote Jadis
+
+## Flux et points de contrôle
+
+| Flux | Contrôle à retenir | Preuve attendue dans l’environnement de test |
+| --- | --- | --- |
+| Navigateur vers Auth et PostgREST | Clé publique côté navigateur, jetons à durée limitée, schéma REST limité à `public`. | Vérifier confirmation d’email, expirations, déconnexion, révocation et comportement après suppression. Les contrôles PostgREST actuels utilisent des jetons de test. |
+| PostgREST vers PostgreSQL | RLS, droits explicites et accès aux parcours limité au titulaire. Découverte sur opt-in et filtre de blocage dans les deux sens. | Rejouer les tests du dépôt, puis vérifier les mêmes droits depuis une instance Supabase isolée avec ses valeurs par défaut. |
+| Annuaire officiel vers PostgreSQL | Export institutionnel, empreinte et provenance, préparation privée, revue avant promotion. | Rapprocher les décomptes de chaque lot, examiner les lignes en conflit et vérifier les conditions de retrait d’un lot. |
+| Opérateur vers administration | Comptes nominatifs, MFA, accès de secours documenté et suivi des changements. | Vérifier qui peut publier, administrer la base, lire les signalements et restaurer une sauvegarde. |
+
+## Exercice d’exploitation
+
+1. Utiliser un environnement Supabase isolé et des comptes fictifs. Relever la version PostgreSQL, les paramètres Auth, les schémas exposés et les rôles.
+2. Capturer une sauvegarde d’essai, restaurer sur une cible isolée et mesurer la durée. Comparer schéma, décomptes et accès après restauration. Le banc actuel vérifie le schéma et les lots d’annuaire fictifs sur PostgreSQL.
+3. Tester la suspension des inscriptions et des imports, la rotation d’un secret de test, le rétablissement et les alertes. Faire valider les délais acceptables de perte de données et de reprise par l’exploitant.
+4. En cas d’incident, consigner le début et le périmètre, suspendre le flux concerné, limiter l’accès aux éléments conservés et faire évaluer le risque pour les personnes par le responsable du traitement. Répéter la procédure sur données fictives.
+
+## Décisions à faire valider
+
+- Renseigner le responsable du traitement et le contact des personnes. Attribuer nominativement les fonctions d’administration et de modération.
+- Valider les bases légales et la notice par finalité. Fixer les durées de conservation des parcours, comptes, messages, signalements, journaux et sauvegardes. Tester le retrait de visibilité, l’accès, la rectification et l’effacement.
+- Documenter les sous-traitants, les transferts et l’évaluation du besoin d’AIPD. Prévoir un circuit de signalement et de traitement des incidents. [RGPD, articles 28 à 35](https://eur-lex.europa.eu/eli/reg/2016/679/oj) · [Critères et listes AIPD de la CNIL](https://www.cnil.fr/fr/RGPD-analyse-impact-protection-des-donnees-aipd)
+
+Les preuves de développement et les décisions qui autorisent un pilote doivent être consignées avant d’ouvrir les inscriptions.
