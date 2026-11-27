@@ -5,6 +5,7 @@ import {betaConfig} from './beta-config.js';
 const $ = selector => document.querySelector(selector);
 let session = null, chosen = null;
 const status = message => $('#status').textContent = message;
+const authRedirect = () => encodeURIComponent(new URL('./beta.html', window.location.href).href);
 
 async function api(path, {method='GET', body, prefer, token=session?.access_token} = {}) {
   if (!betaConfig) throw Error('Cette version ne dispose pas d’une instance de bêta configurée.');
@@ -44,7 +45,7 @@ $('#send-message').onsubmit=async e=>{e.preventDefault();const thread=activeThre
 
 async function enterBeta(){$('#account-data').hidden=false;const members=await api('/rest/v1/beta_members?select=user_id');if(!members?.length){$('#invite').hidden=false;$('#auth').hidden=true;$('#signup').hidden=true;$('#toggle-signup').hidden=true;$('#toggle-recovery').hidden=true;$('#recover').hidden=true;status('Entre ton code d’invitation pour activer la bêta.');return}$('#invite').hidden=true;const p=await api('/rest/v1/profiles?select=display_name,discoverable');$('#private').hidden=false;$('#login').hidden=true;if(p.length){$('#profile input').value=p[0].display_name;$('#profile [name=discoverable]').checked=p[0].discoverable;$('#discovery').hidden=!p[0].discoverable;$('#journey').hidden=false;$('#private-navigation').hidden=false;$('#reconnections').hidden=false;await load();await Promise.all([timeline.show(p[0].discoverable),capsules.show()])}status('Connecté à la bêta privée.')}
 $('#toggle-signup').onclick=()=>{$('#signup').hidden=!$('#signup').hidden;$('#toggle-signup').textContent=$('#signup').hidden?'Créer un compte':'Annuler l’inscription'};
-$('#signup').onsubmit=async e=>{e.preventDefault();const d=new FormData(e.target),button=e.target.querySelector('button');button.disabled=true;try{await api('/auth/v1/signup',{method:'POST',body:{email:d.get('email'),password:d.get('password')}});e.target.reset();e.target.hidden=true;$('#toggle-signup').textContent='Créer un compte';status('Vérifie ta boîte mail, confirme ton adresse puis reviens ici pour te connecter.')}catch(err){status(err.message)}finally{button.disabled=false}};
+$('#signup').onsubmit=async e=>{e.preventDefault();const d=new FormData(e.target),button=e.target.querySelector('button');button.disabled=true;try{await api('/auth/v1/signup?redirect_to='+authRedirect(),{method:'POST',body:{email:d.get('email'),password:d.get('password')}});e.target.reset();e.target.hidden=true;$('#toggle-signup').textContent='Créer un compte';status('Vérifie ta boîte mail, confirme ton adresse puis reviens ici pour te connecter.')}catch(err){status(err.message)}finally{button.disabled=false}};
 $('#invite').onsubmit=async e=>{e.preventDefault();const d=new FormData(e.target),button=e.target.querySelector('button');button.disabled=true;try{const ok=await api('/rest/v1/rpc/beta_redeem_invite',{method:'POST',body:{code:d.get('code'),adult:d.get('adult')==='on'}});if(!ok){status('Code invalide, expiré, utilisé ou trop de tentatives. Vérifie aussi ton email.');return}e.target.reset();await enterBeta()}catch(err){status(err.message)}finally{button.disabled=false}};
 $('#cancel-invite').onclick=()=>$('#logout').click();
 
@@ -82,8 +83,7 @@ $('#recover').onsubmit = async event => {
   const submit = form.querySelector('button');
   submit.disabled = true;
   try {
-    const redirect = new URL('./beta.html', window.location.href);
-    await api('/auth/v1/recover?redirect_to=' + encodeURIComponent(redirect.href), {
+    await api('/auth/v1/recover?redirect_to=' + authRedirect(), {
       method: 'POST', body: {email: form.elements.email.value},
     });
     form.reset();

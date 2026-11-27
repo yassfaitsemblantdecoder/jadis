@@ -20,7 +20,7 @@ Le module produit est lisible par le navigateur et doit contenir exclusivement u
 
 1. Créer un projet distinct et consigner sa référence dans le suivi. Confirmer que le projet est vide et que cette cible est celle de la recette avant de lier un outil de migration.
 2. Appliquer les migrations du dépôt dans l’ordre sur ce projet. L’URL et la clé publiable configurent le site. L’opération de migration exige séparément un accès d’administration à la cible isolée.
-3. Définir l’URL HTTPS de la préversion dans Auth et autoriser son retour exact vers `beta.html`. Configurer le fournisseur SMTP avec des boîtes réservées à la recette.
+3. Définir l’URL HTTPS de la préversion dans Auth et autoriser son retour exact vers `beta.html`. Configurer le fournisseur SMTP avec des boîtes réservées à la recette. Le SMTP Supabase par défaut accepte uniquement les destinataires membres de l’équipe. Tester les destinataires fictifs hors équipe avec un fournisseur SMTP autorisé. [Documentation SMTP Supabase](https://supabase.com/docs/guides/auth/auth-smtp)
 4. Exécuter `python3 scripts/check-pilot-target.py` avec les deux variables de la cible. La commande vérifie uniquement la disponibilité d’Auth et le refus d’une lecture anonyme. Exécuter ensuite les scénarios de la [recette produit](pilot-product.md) avec des comptes fictifs.
 
 ## Flux et points de contrôle
@@ -35,6 +35,10 @@ Le module produit est lisible par le navigateur et doit contenir exclusivement u
 ## Banc de test avant pilote
 
 Lancer `bash scripts/test-db.sh --auth`. Le test lance PostgreSQL, PostgREST, Supabase Auth et un récepteur SMTP Mailpit sur un réseau Docker interne sans port publié. Deux comptes fictifs reçoivent leurs emails dans Mailpit. Un jeton réellement émis par Auth est utilisé pour vérifier l’adhésion à la bêta. Le banc est également lancé par le job base de données de la CI.
+
+Pour rejouer la recette avec la page assemblée et Chromium, lancer `bash scripts/test-db.sh --browser`. Il faut Docker, Node.js, Python avec Playwright et Chromium. Si le module Playwright appartient à un autre environnement Python, renseigner `JADIS_BROWSER_PYTHON`. Les services restent sur un réseau Docker interne. Le serveur de test de la page et des emails écoute uniquement sur la boucle locale et est arrêté à la fin.
+
+Le scénario Chromium exécute l’inscription, la confirmation par email, l’invitation, la frise, la recherche privée et la capsule. Il vérifie aussi le retour de l’email de récupération, le refus de l’ancien mot de passe, le contenu du JSON téléchargé et la fermeture du compte après réauthentification.
 
 Le test prouve le chemin SMTP local. La délivrabilité via un prestataire, les liens de retour vers le site hébergé et les paramètres du projet Supabase de pilote restent à vérifier avec leur configuration réelle. La déconnexion invalide le renouvellement testé. Des jetons d’accès déjà émis peuvent rester utilisables jusqu’à leur expiration.
 
