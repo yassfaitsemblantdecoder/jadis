@@ -28,4 +28,6 @@ Le test prouve le chemin SMTP local. La délivrabilité via un prestataire, les 
 - Valider les bases légales et la notice par finalité. Fixer les durées de conservation des parcours, comptes, messages, signalements, journaux et sauvegardes. Tester le retrait de visibilité, l’accès, la rectification et l’effacement.
 - Documenter les sous-traitants, les transferts et l’évaluation du besoin d’AIPD. Prévoir un circuit de signalement et de traitement des incidents. [RGPD, articles 28 à 35](https://eur-lex.europa.eu/eli/reg/2016/679/oj) · [Critères et listes AIPD de la CNIL](https://www.cnil.fr/fr/RGPD-analyse-impact-protection-des-donnees-aipd)
 
+Le [parcours de la bêta](product-beta.md) décrit les fonctionnalités disponibles en développement et les données incluses dans les commandes de compte.
+
 Les preuves de développement et les décisions qui autorisent un pilote doivent être consignées avant d’ouvrir les inscriptions.

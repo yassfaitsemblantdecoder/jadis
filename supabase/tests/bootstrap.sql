@@ -5,5 +5,6 @@ create role authenticated nologin;
 create schema auth;
 create table auth.users (
   id uuid primary key,
+  email text,
   email_confirmed_at timestamptz
 );

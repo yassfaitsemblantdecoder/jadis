@@ -115,12 +115,30 @@ def main():
     status, _ = call(AUTH + "/recover", data={"email": credentials["email"]})
     assert status == 200, status
     recovery_token = verify_new_email(previous_messages)
+    account_endpoint = API + "/rpc/beta_account_data"
+    assert call(account_endpoint, token=recovery_token, data={"action":"delete","confirm":True})[0] >= 400
     new_password = "Fixture-Jadis-recovered-43!"
     status, _ = call(AUTH + "/user", token=recovery_token, method="PUT", data={"password": new_password})
     assert status == 200, status
     assert call(password_url, data=credentials)[0] in (400, 401, 422), "Old password remains valid"
-    assert call(password_url, data={**credentials, "password": new_password})[0] == 200
-    print("Supabase Auth, confirmation, single-use invitation, logout and password recovery checks passed.")
+    status, current_session = call(password_url, data={**credentials, "password": new_password})
+    assert status == 200, status
+    current_token = current_session["access_token"]
+    assert call(API + "/profiles", token=current_token, data={"id":member,"display_name":"Compte fictif"})[0] == 201
+    event = {"kind":"camp","place":"Colonie fictive","city":"Commune fictive","start_year":2005,"end_year":2006}
+    status, row = call(API + "/rpc/beta_timeline", token=current_token, data={"action":"save","details":event})
+    assert status == 200, status
+    status, exported = call(account_endpoint, token=current_token, data={"action":"export"})
+    assert status == 200 and exported["account"]["email"] == credentials["email"]
+    assert [item["id"] for item in exported["timeline"]] == [row["id"]]
+    status, other_export = call(account_endpoint, token=nonmember_token, data={"action":"export"})
+    assert status == 200 and other_export["account"]["email"] == other["email"] and not other_export["timeline"]
+    assert call(account_endpoint, token=current_token, data={"action":"delete"})[0] >= 400
+    assert call(account_endpoint, token=current_token, data={"action":"delete","confirm":True}) == (200, {"deleted":True})
+    assert call(account_endpoint, token=current_token, data={"action":"export"})[0] >= 400
+    assert call(API + "/rpc/beta_timeline", token=current_token, data={"action":"list"})[0] >= 400
+    assert call(password_url, data={**credentials,"password":new_password})[0] in (400, 401, 422)
+    print("Supabase Auth, confirmation, single-use invitation, logout, password recovery, data export and account removal checks passed.")
 
 
 if __name__ == "__main__":
