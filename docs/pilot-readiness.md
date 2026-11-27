@@ -4,10 +4,16 @@
 
 | Flux | Contrôle à retenir | Preuve attendue dans l’environnement de test |
 | --- | --- | --- |
-| Navigateur vers Auth et PostgREST | Clé publique côté navigateur, jetons à durée limitée, schéma REST limité à `public`. | Vérifier confirmation d’email, expirations, déconnexion, révocation et comportement après suppression. Les contrôles PostgREST actuels utilisent des jetons de test. |
+| Navigateur vers Auth et PostgREST | Clé publique côté navigateur, jetons à durée limitée, schéma REST limité à `public`. | Le banc isolé vérifie la confirmation d’email, l’invitation à usage unique, le renouvellement et sa révocation après déconnexion, ainsi que la récupération du mot de passe. Vérifier sur l’instance de pilote les expirations, le comportement après suppression et les paramètres du fournisseur SMTP. |
 | PostgREST vers PostgreSQL | RLS, droits explicites et accès aux parcours limité au titulaire. Découverte sur opt-in et filtre de blocage dans les deux sens. | Rejouer les tests du dépôt, puis vérifier les mêmes droits depuis une instance Supabase isolée avec ses valeurs par défaut. |
 | Annuaire officiel vers PostgreSQL | Export institutionnel, empreinte et provenance, préparation privée, revue avant promotion. | Rapprocher les décomptes de chaque lot, examiner les lignes en conflit et vérifier les conditions de retrait d’un lot. |
 | Opérateur vers administration | Comptes nominatifs, MFA, accès de secours documenté et suivi des changements. | Vérifier qui peut publier, administrer la base, lire les signalements et restaurer une sauvegarde. |
+
+## Banc de test avant pilote
+
+Lancer `bash scripts/test-db.sh --auth`. Le test lance PostgreSQL, PostgREST, Supabase Auth et un récepteur SMTP Mailpit sur un réseau Docker interne sans port publié. Deux comptes fictifs reçoivent leurs emails dans Mailpit. Un jeton réellement émis par Auth est utilisé pour vérifier l’adhésion à la bêta. Le banc est également lancé par le job base de données de la CI.
+
+Le test prouve le chemin SMTP local. La délivrabilité via un prestataire, les liens de retour vers le site hébergé et les paramètres du projet Supabase de pilote restent à vérifier avec leur configuration réelle. La déconnexion invalide le renouvellement testé. Des jetons d’accès déjà émis peuvent rester utilisables jusqu’à leur expiration.
 
 ## Exercice d’exploitation
 
