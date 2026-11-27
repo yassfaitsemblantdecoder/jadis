@@ -1,0 +1,3 @@
+# Codex mission — Foundation First
+Repository: yassfaitsemblantdecoder/jadis
+Read AGENTS.md and docs/foundation-first.md. Start with DATA-01 and ARCH-02: inspect actual repository, create a feature branch, document canonical data model, implement additive migration and isolated synthetic database tests. Open a PR with evidence, rollback and residual risks. If disposable DB cannot run, report that explicitly; do not touch production. Then DATA-02, DATA-03 and ARCH-01 in dependency order. Dedicated security/privacy, legal, trust and operations follow; design comes last. Security/privacy constraints apply throughout. No public registration, real data, paid services or auto-merges. Use GitHub issues as queue. Do not claim production readiness, compliance or certification.
