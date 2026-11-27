@@ -19,9 +19,10 @@ jobs:
         with:
           node-version: '22'
       - run: npm test && node --check beta.js
-      - run: |
-          mkdir -p site
-          cp index.html style.css app.js matching.js directory.js classes.js beta.html beta.js timeline.js capsules.js site/
+      - run: node scripts/build-site.mjs
+        env:
+          JADIS_SUPABASE_URL: ${{ vars.JADIS_SUPABASE_URL }}
+          JADIS_SUPABASE_PUBLISHABLE_KEY: ${{ vars.JADIS_SUPABASE_PUBLISHABLE_KEY }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

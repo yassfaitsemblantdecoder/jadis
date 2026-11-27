@@ -1,8 +1,22 @@
 import {searchSchools} from './directory.js';
 import {installTimeline} from './timeline.js';
 import {installCapsules} from './capsules.js';
-const base='https://uqldohlmhdgsnfexfitg.supabase.co',key='sb_publishable_Bc5MFmtsMFGqP4ZUnT9FDw_VehSmmyq',$=s=>document.querySelector(s);let session=null,chosen=null;const status=t=>$('#status').textContent=t;
-async function api(path,{method='GET',body,prefer,token=session?.access_token}={}){const headers={apikey:key,'Content-Type':'application/json'};if(token)headers.Authorization='Bearer '+token;if(prefer)headers.Prefer=prefer;const r=await fetch(base+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});if(!r.ok)throw Error('Requête refusée ('+r.status+'). Vérifie ton accès ou reconnecte-toi.');return r.status===204?null:await r.json().catch(()=>null)}
+import {betaConfig} from './beta-config.js';
+const $ = selector => document.querySelector(selector);
+let session = null, chosen = null;
+const status = message => $('#status').textContent = message;
+
+async function api(path, {method='GET', body, prefer, token=session?.access_token} = {}) {
+  if (!betaConfig) throw Error('Cette version ne dispose pas d’une instance de bêta configurée.');
+  const headers = {apikey:betaConfig.publishableKey, 'Content-Type':'application/json'};
+  if (token) headers.Authorization = 'Bearer ' + token;
+  if (prefer) headers.Prefer = prefer;
+  const response = await fetch(betaConfig.url + path, {
+    method, headers, body:body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!response.ok) throw Error('Requête refusée (' + response.status + '). Vérifie ton accès ou reconnecte-toi.');
+  return response.status === 204 ? null : await response.json().catch(() => null);
+}
 function reset(){$('#invite').hidden=true;$('#invite').reset();$('#signup').hidden=true;$('#recover').hidden=true;$('#new-password').hidden=true;$('#toggle-recovery').hidden=false;$('#auth').hidden=false;$('#toggle-signup').hidden=false;session=null;chosen=null;$('#account-data').hidden=true;$('#account-removal').open=false;$('#delete-account').reset();timeline.reset();capsules.reset();$('#private-navigation').hidden=true;$('#private').hidden=true;$('#login').hidden=false;$('#journey').hidden=true;$('#entry').hidden=true;$('#profile').reset();clearConnections();$('#discovery').hidden=true;$('#matches').replaceChildren();$('#entries').replaceChildren();$('#beta-graph').replaceChildren();$('#results').replaceChildren();$('#query').value=''}
 $('#auth').onsubmit=async e=>{e.preventDefault();const d=new FormData(e.target);try{reset();session=await api('/auth/v1/token?grant_type=password',{method:'POST',body:{email:d.get('email'),password:d.get('password')}});e.target.reset();await enterBeta()}catch(err){reset();status(err.message)}};
 $('#logout').onclick=async()=>{try{await api('/auth/v1/logout',{method:'POST'})}catch{}finally{reset();status('Déconnecté.')}};
@@ -13,16 +27,19 @@ async function load(){const rows=await api('/rest/v1/beta_school_entries?select=
 
 $('#discover').onclick=async()=>{const box=$('#matches');box.replaceChildren();try{const rows=await api('/rest/v1/rpc/beta_discover',{method:'POST',body:{}});if(!session)return;if(!rows.length){box.textContent='Pas encore de correspondance. Ta constellation grandira avec les inscriptions.';return}for(const r of rows){const a=document.createElement('article');a.textContent=r.display_name+' · '+r.school_name+' · '+r.school_year+' · '+r.match_type;for(const [label,action] of [['Se reconnecter',async()=>{await reconnect('request',{target:r.person_id});status('Demande traitée. Consulte tes retrouvailles.');await loadConnections()}],['Bloquer',async()=>{await api('/rest/v1/blocks',{method:'POST',body:{owner:session.user.id,target:r.person_id},prefer:'return=minimal'});a.remove()}],['Signaler',async()=>{const reason=prompt('Motif du signalement (sans données sensibles)');if(!reason?.trim())return;await api('/rest/v1/reports',{method:'POST',body:{reporter:session.user.id,target:r.person_id,reason:reason.trim().slice(0,2000)},prefer:'return=minimal'});status('Signalement transmis.')} ]]){const b=document.createElement('button');b.textContent=label;b.onclick=async()=>{try{await action()}catch(err){status(err.message)}};a.append(document.createElement('br'),b)}box.append(a)}}catch(err){status(err.message)}};
 
-let activeThread=null, socialEpoch=0;
+let activeThread=null, activePeer=null, socialEpoch=0;
 const reconnect=(action,params={})=>api('/rest/v1/rpc/beta_reconnect',{method:'POST',body:{action,...params}});
-function clearConnections(){socialEpoch++;activeThread=null;$('#reconnections').hidden=true;$('#connections').replaceChildren();$('#messages').replaceChildren();$('#conversation').hidden=true;$('#send-message').reset()}
+function clearConnections(){socialEpoch++;activeThread=null;activePeer=null;$('#reconnections').hidden=true;$('#connections').replaceChildren();$('#messages').replaceChildren();$('#conversation').hidden=true;$('#send-message').reset()}
 function socialButton(parent,label,action){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await action()}catch(e){status(e.message)}finally{b.disabled=false}};parent.append(b)}
-async function loadConnections(){const epoch=socialEpoch;const rows=await reconnect('list');if(epoch!==socialEpoch||!session)return;const box=$('#connections');box.replaceChildren();if(!rows.length)box.textContent='Tes futures retrouvailles apparaîtront ici.';for(const r of rows){const a=document.createElement('article');a.textContent=r.display_name+' · '+({accepted:'Reconnectés',declined:'Demande refusée',pending:r.outgoing?'Demande envoyée':'Invitation reçue'}[r.status]);if(r.status==='pending'&&!r.outgoing){for(const [label,action] of [['Accepter','accept'],['Refuser','decline']])socialButton(a,label,async()=>{await reconnect(action,{thread:r.id});await loadConnections()})}if(r.status==='accepted')socialButton(a,'Ouvrir la conversation',async()=>{activeThread=r.id;$('#conversation-title').textContent=r.display_name;$('#conversation').hidden=false;await loadMessages()});socialButton(a,'Bloquer',async()=>{await api('/rest/v1/blocks',{method:'POST',body:{owner:session.user.id,target:r.person_id},prefer:'return=minimal'});closeConversation();await loadConnections()});box.append(a)}}
-function closeConversation(){activeThread=null;$('#conversation').hidden=true;$('#messages').replaceChildren();$('#send-message').reset()}
+async function loadConnections(){const epoch=socialEpoch;const rows=await reconnect('list');if(epoch!==socialEpoch||!session)return;const box=$('#connections');box.replaceChildren();if(!rows.length)box.textContent='Tes futures retrouvailles apparaîtront ici.';for(const r of rows){const a=document.createElement('article');a.textContent=r.display_name+' · '+({accepted:'Reconnectés',declined:'Demande refusée',pending:r.outgoing?'Demande envoyée':'Invitation reçue'}[r.status]);if(r.status==='pending'&&!r.outgoing){for(const [label,action] of [['Accepter','accept'],['Refuser','decline']])socialButton(a,label,async()=>{await reconnect(action,{thread:r.id});await loadConnections()})}if(r.status==='accepted')socialButton(a,'Ouvrir la conversation',async()=>{activeThread=r.id;activePeer=r.person_id;$('#conversation-title').textContent=r.display_name;$('#conversation').hidden=false;await loadMessages()});socialButton(a,'Bloquer',async()=>{await api('/rest/v1/blocks',{method:'POST',body:{owner:session.user.id,target:r.person_id},prefer:'return=minimal'});closeConversation();await loadConnections()});box.append(a)}}
+function closeConversation(){activeThread=null;activePeer=null;$('#conversation').hidden=true;$('#messages').replaceChildren();$('#send-message').reset()}
 async function loadMessages(){const thread=activeThread,epoch=socialEpoch;if(!thread)return;try{const rows=await reconnect('messages',{thread});if(epoch!==socialEpoch||thread!==activeThread)return;const box=$('#messages');box.replaceChildren();for(const r of rows){const a=document.createElement('article');const name=document.createElement('strong');name.textContent=r.outgoing?'Moi':'Mon contact';const body=document.createElement('p');body.style.whiteSpace='pre-wrap';body.textContent=r.body;a.append(name,body);box.append(a)}}catch(e){closeConversation();throw e}}
 $('#refresh-connections').onclick=()=>loadConnections().catch(e=>status(e.message));
 $('#refresh-messages').onclick=()=>loadMessages().catch(e=>status(e.message));
 $('#close-conversation').onclick=closeConversation;
+$('#report-conversation').onclick=()=>{
+  if (activePeer) reportPerson(activePeer).catch(error=>status(error.message));
+};
 $('#send-message').onsubmit=async e=>{e.preventDefault();const thread=activeThread,epoch=socialEpoch;if(!thread)return;const b=e.target.querySelector('button');b.disabled=true;try{await reconnect('send',{thread,content:new FormData(e.target).get('body')});if(epoch===socialEpoch&&activeThread===thread){e.target.reset();await loadMessages()}}catch(err){status(err.message)}finally{b.disabled=false}};
 
 async function enterBeta(){$('#account-data').hidden=false;const members=await api('/rest/v1/beta_members?select=user_id');if(!members?.length){$('#invite').hidden=false;$('#auth').hidden=true;$('#signup').hidden=true;$('#toggle-signup').hidden=true;$('#toggle-recovery').hidden=true;$('#recover').hidden=true;status('Entre ton code d’invitation pour activer la bêta.');return}$('#invite').hidden=true;const p=await api('/rest/v1/profiles?select=display_name,discoverable');$('#private').hidden=false;$('#login').hidden=true;if(p.length){$('#profile input').value=p[0].display_name;$('#profile [name=discoverable]').checked=p[0].discoverable;$('#discovery').hidden=!p[0].discoverable;$('#journey').hidden=false;$('#private-navigation').hidden=false;$('#reconnections').hidden=false;await load();await Promise.all([timeline.show(p[0].discoverable),capsules.show()])}status('Connecté à la bêta privée.')}
@@ -103,13 +120,21 @@ function readAuthCallback() {
   const params = new URLSearchParams(window.location.hash.slice(1));
   if (!params.has('access_token') && !params.has('error_code')) return;
   history.replaceState(null, '', window.location.pathname + window.location.search);
-  if (params.get('type') !== 'recovery' || !params.has('access_token')) return;
+  if (!betaConfig || params.get('type') !== 'recovery' || !params.has('access_token')) return;
   reset();
   recoveryToken = params.get('access_token');
   $('#auth').hidden = true;
   $('#toggle-signup').hidden = true;
   $('#toggle-recovery').hidden = true;
   $('#new-password').hidden = false;
+}
+if (betaConfig) {
+  $('#auth').hidden = false;
+  $('#toggle-signup').hidden = false;
+  $('#toggle-recovery').hidden = false;
+  $('#beta-instructions').hidden = false;
+} else {
+  status('La bêta n’est pas configurée sur ce site. La démo reste disponible.');
 }
 window.addEventListener('hashchange', readAuthCallback);
 readAuthCallback();

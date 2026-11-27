@@ -1,5 +1,19 @@
 # Contrôles avant un pilote Jadis
 
+## Dossiers de travail du pilote
+
+- [Sécurité et exploitation](pilot-security.md)
+- [Données et promotion de l’annuaire](pilot-directory.md)
+- [Protection des données et modération](pilot-privacy.md)
+- [Recette produit](pilot-product.md)
+- [Pilotage et décision d’ouverture](pilot-plan.md)
+
+## Configuration de la version candidate
+
+Le code statique sert la démo et garde la bêta fermée par défaut. Pour produire la version candidate, fournir `JADIS_SUPABASE_URL` et `JADIS_SUPABASE_PUBLISHABLE_KEY` pour l’instance isolée, puis exécuter `node scripts/build-site.mjs`. Le site statique est généré dans `site/`. GitHub Pages lit les variables du dépôt et Vercel les variables de son environnement de build.
+
+Le module produit est lisible par le navigateur et doit contenir exclusivement une clé publiable. Sur la préversion effective, vérifier les destinations de la connexion, de l’inscription, de la récupération et des requêtes API avant le premier compte fictif. Le build seul ne valide ni la configuration Auth ni le fournisseur SMTP.
+
 ## Flux et points de contrôle
 
 | Flux | Contrôle à retenir | Preuve attendue dans l’environnement de test |
