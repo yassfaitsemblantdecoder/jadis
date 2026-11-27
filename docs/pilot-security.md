@@ -19,7 +19,7 @@ Revue du 27 novembre 2026 sur le commit `fad53f3`. Les vérifications ont utilis
 - `bash scripts/test-db.sh --auth` a terminé avec succès. Le banc a rejoué les 14 migrations, restauré la base de test, vérifié les permissions via PostgREST et exécuté les parcours Supabase Auth avec Mailpit.
 - Un contrôle complémentaire des catalogues PostgreSQL a confirmé la sécurité au niveau des lignes sur 29 tables applicatives, dont 18 dans le schéma interne. Le rôle anonyme ne dispose d’aucun droit direct sur ces tables. Le rôle authentifié ne dispose d’aucun droit direct sur les tables du schéma interne. Les neuf RPC du schéma public s’exécutent avec les droits de l’appelant. Les neuf fonctions privilégiées du schéma interne fixent un chemin de recherche vide.
 - Une recherche ciblée dans les 100 objets texte des 48 commits accessibles n’a remonté aucun marqueur parmi les cinq familles recherchées. Clés privées, jetons GitHub, identifiants de clés AWS, clés Supabase secrètes et JWT. La vérification des paramètres hébergés, des journaux CI et des autres formats de secrets reste à compléter.
-- Deux workflows utilisent encore des références d’actions par version majeure. Le job base de données fixe sa révision de `checkout`. Le workflow Pages accorde actuellement ses droits de publication à tous ses jobs. Ces réglages entrent dans la revue de la chaîne de livraison avant l’ouverture.
+- Les deux workflows fixent désormais leurs actions à des SHA Git. Seul le job de déploiement Pages reçoit les droits de publication et ce job est réservé à `main`. La validation des protections GitHub du projet et des droits d’administration reste à faire.
 
 ## Décision avant l’ouverture
 

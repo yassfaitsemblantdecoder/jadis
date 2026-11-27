@@ -8,6 +8,10 @@ const staticFiles = [
 
 const url = process.env.JADIS_SUPABASE_URL?.trim();
 const publishableKey = process.env.JADIS_SUPABASE_PUBLISHABLE_KEY?.trim();
+const directoryAccess = process.env.JADIS_BETA_EXTERNAL_DIRECTORY?.trim();
+if (directoryAccess && directoryAccess !== 'true' && directoryAccess !== 'false') {
+  throw Error('JADIS_BETA_EXTERNAL_DIRECTORY must be true or false.');
+}
 let config = null;
 
 if (url || publishableKey) {
@@ -20,7 +24,7 @@ if (url || publishableKey) {
       || target.username || target.password || target.pathname !== '/' || target.search || target.hash) {
     throw Error('JADIS_SUPABASE_URL must be an HTTPS origin or a local HTTP origin.');
   }
-  config = { url: target.origin, publishableKey };
+  config = { url: target.origin, publishableKey, externalDirectory: directoryAccess === 'true' };
 }
 
 const output = resolve(process.argv[2] ?? 'site');

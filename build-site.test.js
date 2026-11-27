@@ -8,12 +8,13 @@ import test from 'node:test';
 
 const builder = fileURLToPath(new URL('./scripts/build-site.mjs', import.meta.url));
 
-async function build(t, url = '', key = '') {
+async function build(t, url = '', key = '', externalDirectory = '') {
   const output = await mkdtemp(join(tmpdir(), 'jadis-build-'));
   t.after(() => rm(output, { recursive: true, force: true }));
   const result = spawnSync(process.execPath, [builder, output], {
     encoding: 'utf8',
-    env: { ...process.env, JADIS_SUPABASE_URL: url, JADIS_SUPABASE_PUBLISHABLE_KEY: key },
+    env: { ...process.env, JADIS_SUPABASE_URL: url, JADIS_SUPABASE_PUBLISHABLE_KEY: key,
+      JADIS_BETA_EXTERNAL_DIRECTORY: externalDirectory },
   });
   return { output, result };
 }
@@ -29,7 +30,14 @@ test('the build includes only the explicit isolated beta target and public key',
   const { output, result } = await build(t, 'https://jadis-fixture.example.test/', 'sb_publishable_fixture');
   assert.equal(result.status, 0, result.stderr);
   assert.equal(await readFile(join(output, 'beta-config.js'), 'utf8'),
-    'export const betaConfig = {"url":"https://jadis-fixture.example.test","publishableKey":"sb_publishable_fixture"};\n');
+    'export const betaConfig = {"url":"https://jadis-fixture.example.test","publishableKey":"sb_publishable_fixture","externalDirectory":false};\n');
+});
+
+test('external directory search requires explicit opt-in for a configured beta', async t => {
+  const { output, result } = await build(t, 'https://jadis-fixture.example.test', 'sb_publishable_fixture', 'true');
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(await readFile(join(output, 'beta-config.js'), 'utf8'), /"externalDirectory":true/);
+  assert.match(await readFile(join(output, 'beta.html'), 'utf8'), /id="beta-directory" hidden/);
 });
 
 test('the build rejects incomplete, non-public and invalid target configurations', async t => {
