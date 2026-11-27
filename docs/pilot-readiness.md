@@ -16,6 +16,13 @@ La bêta désactive la recherche d’annuaire externe par défaut. La frise déc
 
 Le module produit est lisible par le navigateur et doit contenir exclusivement une clé publiable. Sur la préversion effective, vérifier les destinations de la connexion, de l’inscription, de la récupération et des requêtes API avant le premier compte fictif. Le build seul ne valide ni la configuration Auth ni le fournisseur SMTP.
 
+## Initialisation de la cible hébergée
+
+1. Créer un projet distinct et consigner sa référence dans le suivi. Confirmer que le projet est vide et que cette cible est celle de la recette avant de lier un outil de migration.
+2. Appliquer les migrations du dépôt dans l’ordre sur ce projet. L’URL et la clé publiable configurent le site. L’opération de migration exige séparément un accès d’administration à la cible isolée.
+3. Définir l’URL HTTPS de la préversion dans Auth et autoriser son retour exact vers `beta.html`. Configurer le fournisseur SMTP avec des boîtes réservées à la recette.
+4. Exécuter `python3 scripts/check-pilot-target.py` avec les deux variables de la cible. La commande vérifie uniquement la disponibilité d’Auth et le refus d’une lecture anonyme. Exécuter ensuite les scénarios de la [recette produit](pilot-product.md) avec des comptes fictifs.
+
 ## Flux et points de contrôle
 
 | Flux | Contrôle à retenir | Preuve attendue dans l’environnement de test |
