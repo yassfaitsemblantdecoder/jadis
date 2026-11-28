@@ -20,9 +20,26 @@ Les données proviennent des trois sources institutionnelles et leur réutilisat
 ## Critères proposés pour le sous-lot
 
 1. Identifier le lot par sa source, sa date de publication et son empreinte SHA-256. Garder l’URL du catalogue, l’éditeur et la licence avec le manifeste d’admission. Vérifier que le total des lignes est exactement la somme des candidats, doublons équivalents et rejets. Réutiliser les mêmes octets lors du rejeu.
-2. Pour chaque établissement du périmètre convenu, exiger un nom et une commune renseignés, une UAI au format attendu et un statut officiel `OUVERT` dans le même export. Appliquer la correspondance de types explicite `Ecole → primary`, `Collège → middle` et `Lycée → secondary`. Le staging actuel ne conserve pas le statut. Joindre sa preuve au manifeste depuis l’export projeté et vérifié.
+2. Pour chaque établissement du périmètre convenu, exiger un nom et une commune renseignés, une UAI au format attendu et un statut officiel `OUVERT` dans le même export. Appliquer la correspondance de types explicite `Ecole → primary`, `Collège → middle` et `Lycée → secondary`. Le staging conserve le statut fourni par l’export à partir de la migration 015. Préparer la projection scolaire avec `etat` et joindre la preuve d’origine au manifeste.
 3. Décider du rattachement de chaque identifiant à un seul UUID canonique. Un identifiant déjà lié au même établissement réutilise l’UUID. Une nouvelle entrée reçoit un UUID dans la transaction de promotion. Une divergence avec un identifiant existant, une UAI affectée à deux entités, un renommage non corroboré ou un campus ambigu reste en attente. Une similarité de nom et de commune déclenche une revue.
 4. Enregistrer dans le manifeste les comptes agrégés des candidats approuvés, mis en attente et rejetés, les motifs, le lot source et la personne chargée de la revue. Le total des candidats approuvés et en attente doit égaler le nombre de candidats du lot. Le seuil proposé est zéro conflit d’identifiant non résolu parmi les lignes admises et zéro écriture dans un parcours lors de cette opération.
+
+## Prévisualiser un lot
+
+Après la migration 015, le rôle d’exploitation habilité peut obtenir le résultat agrégé ci-dessous depuis `psql` sur une base jetable avec un lot fictif et son paramètre `-v batch_id=UUID`. Les rôles clients n’ont pas le droit d’appeler cette fonction.
+
+```sql
+select decision, reason, count(*)
+from jadis_private.preview_directory_promotion(:'batch_id'::uuid)
+group by decision, reason
+order by decision, reason;
+```
+
+Utiliser l’UUID exact du manifeste et vérifier que le nombre de décisions correspond au nombre de candidats du lot. Les lignes mises en quarantaine restent dans `directory_import_rejections`. Une décision `promotable` indique que le filtre est satisfait. L’admission du lot et l’écriture canonique restent des opérations distinctes.
+
+Projeter `identifiant_de_l_etablissement,nom_etablissement,nom_commune,type_etablissement,etat` pour une nouvelle préparation scolaire. Un lot historique sans statut reste en revue. Le rejeu des mêmes octets, avec la même source et la même date publiée, ne modifie pas le lot. Produire un nouvel export projeté pour apporter la preuve manquante, sans écraser l’empreinte du lot d’origine.
+
+La prévisualisation vérifie les identifiants canoniques `uai` et `paysage` et signale les anciennes clés de source. Pour les écoles, l’équivalence utilise le nom, le type et le statut du référentiel. La commune n’est pas encore enregistrée dans le modèle canonique. Les homonymes dans une même commune au sein du lot et les divergences restent à revoir. Les établissements fermés ou du supérieur restent à examiner avant leur admission.
 
 ## Preuves attendues avant bascule
 

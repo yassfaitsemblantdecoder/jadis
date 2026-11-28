@@ -17,11 +17,13 @@ batch as (
 ),
 candidates as (
   insert into jadis_private.directory_import_candidates
-    (batch_id, external_id, uai, name, city, kind, opened_on, closed_on, needs_review)
-  select batch.id, entry.external_id, entry.uai, entry.name, entry.city, entry.kind, entry.opened_on, entry.closed_on, entry.needs_review
+    (batch_id, external_id, uai, name, city, kind, source_status, opened_on, closed_on, needs_review)
+  select batch.id, entry.external_id, entry.uai, entry.name, entry.city, entry.kind, entry.source_status,
+    entry.opened_on, entry.closed_on, entry.needs_review
   from batch cross join payload
   cross join lateral jsonb_to_recordset(body->'candidates')
-    as entry(external_id text, uai text, name text, city text, kind text, opened_on date, closed_on date, needs_review boolean)
+    as entry(external_id text, uai text, name text, city text, kind text, source_status text,
+             opened_on date, closed_on date, needs_review boolean)
   returning 1
 ),
 rejections as (

@@ -64,25 +64,32 @@ def source_date(row, key):
         raise ValueError("invalid_date") from error
 
 
-def normalize(source, row):
+def source_identifier(source, row):
     if source == "school":
-        identifier = uai(row, "identifiant_de_l_etablissement")
-        official_uai = identifier
+        return uai(row, "identifiant_de_l_etablissement")
+    if source == "closed":
+        return uai(row, "numero_uai")
+    return text(row, "etablissement_id_paysage", 150)
+
+
+def normalize(source, row, identifier):
+    official_uai = identifier
+    source_status = None
+    if source == "school":
         name = text(row, "nom_etablissement", 300)
         city, kind = text(row, "nom_commune", 150), text(row, "type_etablissement", 150)
+        status = text(row, "etat", 80)
+        source_status = status.upper() if status else None
+        if source_status and len(source_status) > 80:
+            raise ValueError("invalid_field_value")
     elif source == "closed":
-        identifier = uai(row, "numero_uai")
-        official_uai = identifier
         names = [text(row, key, 300) for key in ("appellation_officielle", "denomination_principale", "patronyme_uai")]
         name = next((name for name in names if name and name != "-"), None)
         city, kind = text(row, "libelle_commune", 150), text(row, "nature_uai_libe", 150)
     else:
-        identifier = text(row, "etablissement_id_paysage", 150)
         official_uai = uai(row, "uai")
         name = text(row, "uo_lib_officiel", 300) or text(row, "uo_lib", 300)
         city, kind = text(row, "com_nom", 150), higher_kind(row)
-    if not identifier:
-        raise ValueError("missing_identifier")
     if not name or name == "-":
         if source != "closed":
             raise ValueError("missing_name")
@@ -92,7 +99,8 @@ def normalize(source, row):
     if source == "closed" and (not closed_on or (opened_on and opened_on > closed_on)):
         raise ValueError("invalid_closure_period")
     return {"external_id": identifier, "uai": official_uai, "name": name,
-            "city": city, "kind": kind, "opened_on": opened_on, "closed_on": closed_on,
+            "city": city, "kind": kind, "source_status": source_status,
+            "opened_on": opened_on, "closed_on": closed_on,
             "needs_review": name is None}
 
 
@@ -109,19 +117,28 @@ def prepare(source, update, publisher, content):
 
     grouped = defaultdict(list)
     rejected = []
+    invalid_identifiers = set()
     for number, row in enumerate(rows, start=1):
+        identifier = None
         try:
-            entry = normalize(source, row)
+            identifier = source_identifier(source, row)
+            if not identifier:
+                raise ValueError("missing_identifier")
+            entry = normalize(source, row, identifier)
         except ValueError as error:
-            rejected.append({"row_number": number, "reason": str(error)})
+            rejection = {"row_number": number, "reason": str(error)}
+            if identifier:
+                rejection["external_id"] = identifier
+                invalid_identifiers.add(identifier)
+            rejected.append(rejection)
         else:
-            grouped[entry["external_id"]].append((number, entry))
+            grouped[identifier].append((number, entry))
 
     candidates = []
     duplicates = 0
-    for matches in grouped.values():
+    for identifier, matches in grouped.items():
         first = matches[0][1]
-        if any(candidate != first for _, candidate in matches):
+        if identifier in invalid_identifiers or any(candidate != first for _, candidate in matches):
             rejected.extend(
                 {"row_number": number, "reason": "identifier_conflict", "external_id": entry["external_id"]}
                 for number, entry in matches
