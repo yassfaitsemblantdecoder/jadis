@@ -1,8 +1,11 @@
 import {searchSchools} from './directory.js';
 import {installTimeline} from './timeline.js';
 import {installCapsules} from './capsules.js';
+import {installPilotSchool} from './pilot-school.js';
 import {betaConfig} from './beta-config.js';
 const $ = selector => document.querySelector(selector);
+const minimalPilot = betaConfig?.minimalPilot === true;
+const externalDirectory = !minimalPilot && betaConfig?.externalDirectory === true;
 let session = null, chosen = null;
 const status = message => $('#status').textContent = message;
 const authRedirect = () => encodeURIComponent(new URL('./beta.html', window.location.href).href);
@@ -18,15 +21,81 @@ async function api(path, {method='GET', body, prefer, token=session?.access_toke
   if (!response.ok) throw Error('Requête refusée (' + response.status + '). Vérifie ton accès ou reconnecte-toi.');
   return response.status === 204 ? null : await response.json().catch(() => null);
 }
-function reset(){$('#invite').hidden=true;$('#invite').reset();$('#signup').hidden=true;$('#recover').hidden=true;$('#new-password').hidden=true;$('#toggle-recovery').hidden=false;$('#auth').hidden=false;$('#toggle-signup').hidden=false;session=null;chosen=null;$('#account-data').hidden=true;$('#account-removal').open=false;$('#delete-account').reset();timeline.reset();capsules.reset();$('#private-navigation').hidden=true;$('#private').hidden=true;$('#login').hidden=false;$('#journey').hidden=true;$('#entry').hidden=true;$('#profile').reset();clearConnections();$('#discovery').hidden=true;$('#matches').replaceChildren();$('#entries').replaceChildren();$('#beta-graph').replaceChildren();$('#results').replaceChildren();$('#query').value=''}
+function reset() {
+  $('#invite').hidden = true;
+  $('#invite').reset();
+  $('#signup').hidden = true;
+  $('#recover').hidden = true;
+  $('#new-password').hidden = true;
+  $('#toggle-recovery').hidden = false;
+  $('#auth').hidden = false;
+  $('#toggle-signup').hidden = false;
+  session = null;
+  chosen = null;
+  $('#account-data').hidden = true;
+  $('#account-removal').open = false;
+  $('#delete-account').reset();
+  timeline?.reset();
+  capsules?.reset();
+  pilotSchool?.reset();
+  $('#private-navigation').hidden = true;
+  $('#private').hidden = true;
+  $('#login').hidden = false;
+  $('#journey').hidden = true;
+  $('#entry').hidden = true;
+  $('#profile').reset();
+  clearConnections();
+  $('#discovery').hidden = true;
+  $('#matches').replaceChildren();
+  $('#entries').replaceChildren();
+  $('#beta-graph').replaceChildren();
+  $('#results').replaceChildren();
+  $('#query').value = '';
+}
 $('#auth').onsubmit=async e=>{e.preventDefault();const d=new FormData(e.target);try{reset();session=await api('/auth/v1/token?grant_type=password',{method:'POST',body:{email:d.get('email'),password:d.get('password')}});e.target.reset();await enterBeta()}catch(err){reset();status(err.message)}};
 $('#logout').onclick=async()=>{try{await api('/auth/v1/logout',{method:'POST'})}catch{}finally{reset();status('Déconnecté.')}};
-$('#profile').onsubmit=async e=>{e.preventDefault();try{await api('/rest/v1/profiles?on_conflict=id',{method:'POST',body:{id:session.user.id,display_name:new FormData(e.target).get('name').trim(),discoverable:e.target.elements.discoverable.checked},prefer:'resolution=merge-duplicates,return=minimal'});$('#journey').hidden=false;$('#private-navigation').hidden=false;$('#reconnections').hidden=false;$('#discovery').hidden=!e.target.elements.discoverable.checked;$('#matches').replaceChildren();await load();await Promise.all([timeline.show(e.target.elements.discoverable.checked),capsules.show()]);status('Profil enregistré.')}catch(err){status(err.message)}};
-let controller;$('#search-beta').onclick=async()=>{controller?.abort();controller=new AbortController();const signal=controller.signal;if(!betaConfig?.externalDirectory)return;chosen=null;$('#entry').hidden=true;$('#results').replaceChildren();try{const q=$('#query').value.trim();if(q.length<3){status('Saisis au moins trois caractères.');return}const {items,failed}=await searchSchools(q,signal);if(signal.aborted||!session)return;for(const s of items){const b=document.createElement('button');b.textContent=s.name+' — '+s.city;b.onclick=()=>{chosen=s;$('#chosen').textContent=b.textContent;$('#entry').hidden=false};$('#results').append(b)}status(items.length+' résultat(s)'+(failed.length?' · certaines sources indisponibles':''))}catch(err){if(!signal.aborted)status('Recherche indisponible.')}};
-$('#entry').onsubmit=async e=>{e.preventDefault();if(!chosen||!session)return;const d=new FormData(e.target);try{await api('/rest/v1/beta_school_entries',{method:'POST',body:{user_id:session.user.id,directory_id:chosen.id,school_name:chosen.name,city:chosen.city||'',year:Number(d.get('year')),level:String(d.get('level')).trim(),section:String(d.get('section')).trim().toUpperCase()},prefer:'return=minimal'});e.target.reset();$('#entry').hidden=true;chosen=null;await load();status('Parcours enregistré.')}catch(err){status(err.message)}};
+async function showMemberFeatures(discoverable) {
+  $('#private-navigation').hidden = false;
+  $('#reconnections').hidden = false;
+  if (pilotSchool) {
+    await pilotSchool.show(discoverable);
+    return;
+  }
+  $('#journey').hidden = false;
+  $('#discovery').hidden = !discoverable;
+  $('#matches').replaceChildren();
+  await load();
+  await Promise.all([timeline.show(discoverable), capsules.show()]);
+}
+
+$('#profile').onsubmit = async event => {
+  event.preventDefault();
+  const form = event.target;
+  const activeSession = session;
+  if (!activeSession) return;
+  const button = form.querySelector('button');
+  const discoverable = form.elements.discoverable.checked;
+  button.disabled = true;
+  try {
+    await api('/rest/v1/profiles?on_conflict=id', {
+      method: 'POST',
+      body: {id:activeSession.user.id, display_name:form.elements.name.value.trim(), discoverable},
+      prefer: 'resolution=merge-duplicates,return=minimal',
+    });
+    if (activeSession !== session) return;
+    await showMemberFeatures(discoverable);
+    if (activeSession === session) status('Profil enregistré.');
+  } catch (error) {
+    if (activeSession === session) status(error.message);
+  } finally {
+    button.disabled = false;
+  }
+};
+let controller;$('#search-beta').onclick=async()=>{controller?.abort();controller=new AbortController();const signal=controller.signal;if(!externalDirectory||!session)return;chosen=null;$('#entry').hidden=true;$('#results').replaceChildren();try{const q=$('#query').value.trim();if(q.length<3){status('Saisis au moins trois caractères.');return}const {items,failed}=await searchSchools(q,signal);if(signal.aborted||!session)return;for(const s of items){const b=document.createElement('button');b.textContent=s.name+' — '+s.city;b.onclick=()=>{chosen=s;$('#chosen').textContent=b.textContent;$('#entry').hidden=false};$('#results').append(b)}status(items.length+' résultat(s)'+(failed.length?' · certaines sources indisponibles':''))}catch(err){if(!signal.aborted)status('Recherche indisponible.')}};
+$('#entry').onsubmit=async e=>{e.preventDefault();if(!externalDirectory||!chosen||!session)return;const d=new FormData(e.target);try{await api('/rest/v1/beta_school_entries',{method:'POST',body:{user_id:session.user.id,directory_id:chosen.id,school_name:chosen.name,city:chosen.city||'',year:Number(d.get('year')),level:String(d.get('level')).trim(),section:String(d.get('section')).trim().toUpperCase()},prefer:'return=minimal'});e.target.reset();$('#entry').hidden=true;chosen=null;await load();status('Parcours enregistré.')}catch(err){status(err.message)}};
 async function load(){const rows=await api('/rest/v1/beta_school_entries?select=*&order=year.asc');const list=$('#entries'),graph=$('#beta-graph');list.replaceChildren();graph.replaceChildren();const ns='http://www.w3.org/2000/svg';function draw(tag,attrs,label){const n=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))n.setAttribute(k,v);if(label)n.textContent=label;graph.append(n)}draw('circle',{cx:250,cy:200,r:24,fill:'var(--atlas-text)'});draw('text',{x:250,y:205,'text-anchor':'middle',fill:'var(--atlas)'},'Moi');const hubs=[...new Map(rows.map(r=>[r.directory_id,r])).values()];hubs.forEach((r,i)=>{const a=-Math.PI/2+i*2*Math.PI/hubs.length,x=250+140*Math.cos(a),y=200+140*Math.sin(a);draw('line',{x1:250,y1:200,x2:x,y2:y,stroke:'var(--graph-edge)'});draw('circle',{cx:x,cy:y,r:14,fill:'var(--graph-primary-school)'});draw('text',{x,y:y+26,'text-anchor':'middle',fill:'var(--atlas-text)','font-size':11},r.school_name.slice(0,28))});for(const r of rows){const article=document.createElement('article');article.textContent=r.school_name+' · '+r.year+'–'+(r.year+1)+' · '+r.level+' '+r.section;const b=document.createElement('button');b.textContent='Retirer';b.onclick=async()=>{try{await api('/rest/v1/beta_school_entries?id=eq.'+encodeURIComponent(r.id),{method:'DELETE'});await load()}catch(err){status(err.message)}};article.append(document.createElement('br'),b);list.append(article)}}
 
-$('#discover').onclick=async()=>{const box=$('#matches');box.replaceChildren();try{const rows=await api('/rest/v1/rpc/beta_discover',{method:'POST',body:{}});if(!session)return;if(!rows.length){box.textContent='Pas encore de correspondance. Ta constellation grandira avec les inscriptions.';return}for(const r of rows){const a=document.createElement('article');a.textContent=r.display_name+' · '+r.school_name+' · '+r.school_year+' · '+r.match_type;for(const [label,action] of [['Se reconnecter',async()=>{await reconnect('request',{target:r.person_id});status('Demande traitée. Consulte tes retrouvailles.');await loadConnections()}],['Bloquer',async()=>{await api('/rest/v1/blocks',{method:'POST',body:{owner:session.user.id,target:r.person_id},prefer:'return=minimal'});a.remove()}],['Signaler',async()=>{const reason=prompt('Motif du signalement (sans données sensibles)');if(!reason?.trim())return;await api('/rest/v1/reports',{method:'POST',body:{reporter:session.user.id,target:r.person_id,reason:reason.trim().slice(0,2000)},prefer:'return=minimal'});status('Signalement transmis.')} ]]){const b=document.createElement('button');b.textContent=label;b.onclick=async()=>{try{await action()}catch(err){status(err.message)}};a.append(document.createElement('br'),b)}box.append(a)}}catch(err){status(err.message)}};
+$('#discover').onclick=async()=>{if(minimalPilot||!session)return;const box=$('#matches');box.replaceChildren();try{const rows=await api('/rest/v1/rpc/beta_discover',{method:'POST',body:{}});if(!session)return;if(!rows.length){box.textContent='Pas encore de correspondance. Ta constellation grandira avec les inscriptions.';return}for(const r of rows){const a=document.createElement('article');a.textContent=r.display_name+' · '+r.school_name+' · '+r.school_year+' · '+r.match_type;for(const [label,action] of [['Se reconnecter',async()=>{await reconnect('request',{target:r.person_id});status('Demande traitée. Consulte tes retrouvailles.');await loadConnections()}],['Bloquer',async()=>{await api('/rest/v1/blocks',{method:'POST',body:{owner:session.user.id,target:r.person_id},prefer:'return=minimal'});a.remove()}],['Signaler',async()=>{const reason=prompt('Motif du signalement (sans données sensibles)');if(!reason?.trim())return;await api('/rest/v1/reports',{method:'POST',body:{reporter:session.user.id,target:r.person_id,reason:reason.trim().slice(0,2000)},prefer:'return=minimal'});status('Signalement transmis.')} ]]){const b=document.createElement('button');b.textContent=label;b.onclick=async()=>{try{await action()}catch(err){status(err.message)}};a.append(document.createElement('br'),b)}box.append(a)}}catch(err){status(err.message)}};
 
 let activeThread=null, activePeer=null, socialEpoch=0;
 const reconnect=(action,params={})=>api('/rest/v1/rpc/beta_reconnect',{method:'POST',body:{action,...params}});
@@ -43,7 +112,33 @@ $('#report-conversation').onclick=()=>{
 };
 $('#send-message').onsubmit=async e=>{e.preventDefault();const thread=activeThread,epoch=socialEpoch;if(!thread)return;const b=e.target.querySelector('button');b.disabled=true;try{await reconnect('send',{thread,content:new FormData(e.target).get('body')});if(epoch===socialEpoch&&activeThread===thread){e.target.reset();await loadMessages()}}catch(err){status(err.message)}finally{b.disabled=false}};
 
-async function enterBeta(){$('#account-data').hidden=false;const members=await api('/rest/v1/beta_members?select=user_id');if(!members?.length){$('#invite').hidden=false;$('#auth').hidden=true;$('#signup').hidden=true;$('#toggle-signup').hidden=true;$('#toggle-recovery').hidden=true;$('#recover').hidden=true;status('Entre ton code d’invitation pour activer la bêta.');return}$('#invite').hidden=true;const p=await api('/rest/v1/profiles?select=display_name,discoverable');$('#private').hidden=false;$('#login').hidden=true;if(p.length){$('#profile input').value=p[0].display_name;$('#profile [name=discoverable]').checked=p[0].discoverable;$('#discovery').hidden=!p[0].discoverable;$('#journey').hidden=false;$('#private-navigation').hidden=false;$('#reconnections').hidden=false;await load();await Promise.all([timeline.show(p[0].discoverable),capsules.show()])}status('Connecté à la bêta privée.')}
+async function enterBeta() {
+  $('#account-data').hidden = false;
+  const activeSession = session;
+  const members = await api('/rest/v1/beta_members?select=user_id');
+  if (activeSession !== session) return;
+  if (!members?.length) {
+    $('#invite').hidden = false;
+    $('#auth').hidden = true;
+    $('#signup').hidden = true;
+    $('#toggle-signup').hidden = true;
+    $('#toggle-recovery').hidden = true;
+    $('#recover').hidden = true;
+    status('Entre ton code d’invitation pour activer la bêta.');
+    return;
+  }
+  $('#invite').hidden = true;
+  const profiles = await api('/rest/v1/profiles?select=display_name,discoverable');
+  if (activeSession !== session) return;
+  $('#private').hidden = false;
+  $('#login').hidden = true;
+  if (profiles.length) {
+    $('#profile [name=name]').value = profiles[0].display_name;
+    $('#profile [name=discoverable]').checked = profiles[0].discoverable;
+    await showMemberFeatures(profiles[0].discoverable);
+  }
+  if (activeSession === session) status('Connecté à la bêta privée.');
+}
 $('#toggle-signup').onclick=()=>{$('#signup').hidden=!$('#signup').hidden;$('#toggle-signup').textContent=$('#signup').hidden?'Créer un compte':'Annuler l’inscription'};
 $('#signup').onsubmit=async e=>{e.preventDefault();const d=new FormData(e.target),button=e.target.querySelector('button');button.disabled=true;try{await api('/auth/v1/signup?redirect_to='+authRedirect(),{method:'POST',body:{email:d.get('email'),password:d.get('password')}});e.target.reset();e.target.hidden=true;$('#toggle-signup').textContent='Créer un compte';status('Vérifie ta boîte mail, confirme ton adresse puis reviens ici pour te connecter.')}catch(err){status(err.message)}finally{button.disabled=false}};
 $('#invite').onsubmit=async e=>{e.preventDefault();const d=new FormData(e.target),button=e.target.querySelector('button');button.disabled=true;try{const ok=await api('/rest/v1/rpc/beta_redeem_invite',{method:'POST',body:{code:d.get('code'),adult:d.get('adult')==='on'}});if(!ok){status('Code invalide, expiré, utilisé ou trop de tentatives. Vérifie aussi ton email.');return}e.target.reset();await enterBeta()}catch(err){status(err.message)}finally{button.disabled=false}};
@@ -56,21 +151,34 @@ async function reportPerson(personId) {
   status('Signalement transmis.');
 }
 
-const capsules = installCapsules({ api, status, connections: () => reconnect('list'), report: reportPerson });
-const timeline = installTimeline({
-  api,
-  status,
+async function requestReconnection(personId) {
+  const activeSession = session;
+  await reconnect('request', {target: personId});
+  if (activeSession !== session) return;
+  status('Demande traitée. Consulte tes retrouvailles.');
+  await loadConnections();
+}
+
+function blockPerson(personId) {
+  return api('/rest/v1/blocks', {method:'POST', body:{owner:session.user.id,target:personId}, prefer:'return=minimal'});
+}
+
+const commonControls = { api, status, reconnect: requestReconnection, block: blockPerson, report: reportPerson };
+const capsules = minimalPilot ? null : installCapsules({ api, status, connections: () => reconnect('list'), report: reportPerson });
+const timeline = minimalPilot ? null : installTimeline({
+  ...commonControls,
   onEntries: rows => capsules.setEntries(rows),
-  async reconnect(personId) {
-    await reconnect('request', {target: personId});
-    status('Demande traitée. Consulte tes retrouvailles.');
+});
+const pilotSchool = minimalPilot ? installPilotSchool({
+  ...commonControls,
+  async block(personId) {
+    const activeSession = session;
+    await blockPerson(personId);
+    if (activeSession !== session) return;
+    if (activePeer === personId) closeConversation();
     await loadConnections();
   },
-  block(personId) {
-    return api('/rest/v1/blocks', {method:'POST', body:{owner:session.user.id,target:personId}, prefer:'return=minimal'});
-  },
-  report: reportPerson,
-});
+}) : null;
 
 let recoveryToken = null;
 $('#toggle-recovery').onclick = () => {
@@ -133,7 +241,15 @@ if (betaConfig) {
   $('#toggle-signup').hidden = false;
   $('#toggle-recovery').hidden = false;
   $('#beta-instructions').hidden = false;
-  $('#beta-directory').hidden = !betaConfig.externalDirectory;
+  $('#beta-directory').hidden = !externalDirectory;
+  $('#pilot-school-link').hidden = !minimalPilot;
+  if (minimalPilot) {
+    document.querySelectorAll('[data-full-beta]').forEach(link => { link.hidden = true; });
+    $('#beta-intro').textContent = 'Retrouve des camarades de ton établissement et de ton année. Accès réservé aux adultes invités.';
+    $('#private-title').textContent = 'Mon profil';
+    $('#profile-discovery-description').textContent = 'Je souhaite être retrouvé par les membres invités de mon établissement et de mon année.';
+    $('#beta-privacy').textContent = 'Profil privé par défaut. La découverte est facultative et limitée à un établissement et une année de rentrée en commun. Aucun email partagé.';
+  }
 } else {
   status('La bêta n’est pas configurée sur ce site. La démo reste disponible.');
 }

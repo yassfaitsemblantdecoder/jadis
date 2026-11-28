@@ -15,6 +15,8 @@ Le code statique sert la démo et garde la bêta fermée par défaut. Pour produ
 
 La bêta désactive la recherche d’annuaire externe par défaut. La frise déclarative et la consultation des entrées existantes restent disponibles. Le build accepte `JADIS_BETA_EXTERNAL_DIRECTORY=true` pour un périmètre explicitement validé.
 
+Pour le pilote scolaire minimal, préparer une base isolée neuve, appliquer les migrations et admettre la sélection scolaire. Appliquer ensuite `supabase/import/enable_pilot_school_only.sql` avant le premier trafic client. Cette activation retire les droits des anciens parcours, capsules et recherches en une transaction. Construire le site correspondant avec `JADIS_BETA_MINIMAL_PILOT=true`, qui ne peut pas être combiné à l’annuaire externe.
+
 Le module produit est lisible par le navigateur et doit contenir exclusivement une clé publiable. Sur la préversion effective, vérifier les destinations de la connexion, de l’inscription, de la récupération et des requêtes API avant le premier compte fictif. Le build seul ne valide ni la configuration Auth ni le fournisseur SMTP.
 
 ## Initialisation de la cible hébergée
@@ -38,6 +40,8 @@ Le module produit est lisible par le navigateur et doit contenir exclusivement u
 Lancer `bash scripts/test-db.sh --auth`. Le test lance PostgreSQL, PostgREST, Supabase Auth et un récepteur SMTP Mailpit sur un réseau Docker interne sans port publié. Deux comptes fictifs reçoivent leurs emails dans Mailpit. Un jeton réellement émis par Auth est utilisé pour vérifier l’adhésion à la bêta. Le banc est également lancé par le job base de données de la CI.
 
 Pour rejouer la recette avec la page assemblée et Chromium, lancer `bash scripts/test-db.sh --browser`. Il faut Docker, Node.js, Python avec Playwright et Chromium. Si le module Playwright appartient à un autre environnement Python, renseigner `JADIS_BROWSER_PYTHON`. Les services restent sur un réseau Docker interne. Le serveur de test de la page et des emails écoute uniquement sur la boucle locale et est arrêté à la fin.
+
+`bash scripts/test-db.sh --browser-school` exerce la version scolaire minimale avec ces mêmes services. Le test active les restrictions côté serveur sur une base jetable, admet des établissements fictifs, vérifie le parcours scolaire et l’export, puis contrôle les réponses des anciennes routes avec un vrai jeton de test.
 
 Le scénario Chromium exécute l’inscription, la confirmation par email, l’invitation, la frise, la recherche privée et la capsule. Il vérifie aussi le retour de l’email de récupération, le refus de l’ancien mot de passe, le contenu du JSON téléchargé et la fermeture du compte après réauthentification.
 

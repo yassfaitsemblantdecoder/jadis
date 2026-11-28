@@ -34,7 +34,7 @@ def main():
         request_headers = dict(headers or {})
         if token:
             request_headers["Authorization"] = f"Bearer {token}"
-        data = json.dumps(body if body is not None else {}).encode() if method == "POST" else None
+        data = json.dumps(body if body is not None else {}).encode() if method in ("POST", "PATCH") else None
         if data:
             request_headers["Content-Type"] = "application/json"
         req = Request(base + path, data=data, headers=request_headers, method=method)
@@ -92,7 +92,67 @@ def main():
     assert reconnect(owner_token, "list") == (200, [])
     assert reconnect(peer_token, "list") == (200, [])
     check_timeline(call, secret, jwt(nonmember, secret))
+    check_pilot_school(call, secret, jwt(nonmember, secret))
     print("PostgREST checks passed.")
+
+
+def check_pilot_school(call, secret, nonmember_token):
+    ids = [f"00000000-0000-4000-8000-{subject:012d}" for subject in (7, 8, 9, 10)]
+    owner, peer, private, other_year = [jwt(member, secret) for member in ids]
+
+    def school(token, action, **args):
+        return call("/rpc/beta_pilot_school", token, method="POST", body={"action": action, **args})
+
+    def reconnect(token, target):
+        return call("/rpc/beta_reconnect", token, method="POST", body={"action": "request", "target": target})
+
+    assert school(None, "catalog")[0] >= 400
+    assert school(nonmember_token, "catalog")[0] >= 400
+    status, catalog = school(owner, "catalog")
+    assert status == 200 and {row["uai"] for row in catalog} == {"0000170A", "0000171B"}
+    assert all(set(row) == {"id", "name", "kind", "uai"} for row in catalog)
+    selected = next(row for row in catalog if row["uai"] == "0000170A")
+    entry = {"institution_id": selected["id"], "academic_year": 2008}
+    assert school(owner, "save", institution_id="10000000-0000-4000-8000-000000000179", academic_year=2008)[0] >= 400
+    assert school(owner, "save", institution_id=selected["id"], academic_year=2101)[0] >= 400
+    assert school(owner, "save", **entry)[0] == 200
+    assert school(owner, "list") == (200, [{**entry, "name": selected["name"], "discoverable": False}])
+    assert school(peer, "list") == (200, [])
+    assert school(peer, "delete", **entry) == (200, False)
+    assert school(peer, "save", **entry, discoverable=True)[0] == 200
+    assert reconnect(peer, ids[0])[0] >= 400
+    assert school(owner, "save", **entry, discoverable=True)[0] == 200
+    status, withdrawn_schools = school(private, "list")
+    assert status == 200 and len(withdrawn_schools) == 1
+    old_school = withdrawn_schools[0]
+    assert old_school["name"] == "École retirée fictive" and old_school["discoverable"]
+    old_entry = {key: old_school[key] for key in ("institution_id", "academic_year")}
+    assert school(private, "save", **old_entry, discoverable=False) == (200, {**old_school, "discoverable": False})
+    assert school(private, "save", **old_entry, discoverable=True)[0] >= 400
+    assert school(private, "delete", **old_entry) == (200, True)
+    assert school(private, "save", **entry)[0] == 200
+    assert school(other_year, "save", institution_id=selected["id"], academic_year=2009, discoverable=True)[0] == 200
+
+    assert school(owner, "list") == (200, [{**entry, "name": selected["name"], "discoverable": True}])
+    assert school(owner, "discover", **entry) == (200, [{
+        "person_id": ids[1], "display_name": "Personne fictive 8", "institution_name": selected["name"],
+        "academic_year": 2008,
+    }])
+    assert reconnect(owner, ids[3])[0] >= 400
+    assert reconnect(owner, ids[1]) == (200, {"ok": True})
+    assert school(owner, "save", **entry, discoverable=False)[0] == 200
+    assert reconnect(peer, ids[0])[0] >= 400
+    assert school(owner, "save", **entry, discoverable=True)[0] == 200
+    assert call(f"/profiles?id=eq.{ids[1]}", peer, method="PATCH", body={"discoverable": False})[0] == 204
+    assert reconnect(owner, ids[1])[0] >= 400
+    assert call(f"/profiles?id=eq.{ids[1]}", peer, method="PATCH", body={"discoverable": True})[0] == 204
+    assert call("/blocks", owner, method="POST", body={"owner": ids[0], "target": ids[1]})[0] == 201
+    assert school(peer, "discover", **entry) == (200, [])
+    assert school(owner, "delete", **entry) == (200, True)
+    assert school(owner, "list") == (200, [])
+    status, rows = school(peer, "list")
+    assert status == 200 and len(rows) == 1 and rows[0]["academic_year"] == 2008
+    print("Minimal school catalog, private attendance, consent, reconnection and blocking checks passed.")
 
 
 def check_timeline(call, secret, nonmember_token):

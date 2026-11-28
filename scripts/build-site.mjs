@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 const staticFiles = [
   'index.html', 'style.css', 'app.js', 'matching.js', 'directory.js', 'classes.js',
-  'beta.html', 'beta.js', 'timeline.js', 'capsules.js',
+  'beta.html', 'beta.js', 'timeline.js', 'capsules.js', 'pilot-school.js',
 ];
 
 const url = process.env.JADIS_SUPABASE_URL?.trim();
@@ -11,6 +11,13 @@ const publishableKey = process.env.JADIS_SUPABASE_PUBLISHABLE_KEY?.trim();
 const directoryAccess = process.env.JADIS_BETA_EXTERNAL_DIRECTORY?.trim();
 if (directoryAccess && directoryAccess !== 'true' && directoryAccess !== 'false') {
   throw Error('JADIS_BETA_EXTERNAL_DIRECTORY must be true or false.');
+}
+const minimalPilot = process.env.JADIS_BETA_MINIMAL_PILOT?.trim();
+if (minimalPilot && minimalPilot !== 'true' && minimalPilot !== 'false') {
+  throw Error('JADIS_BETA_MINIMAL_PILOT must be true or false.');
+}
+if (minimalPilot === 'true' && directoryAccess === 'true') {
+  throw Error('The minimal pilot cannot use the external directory.');
 }
 let config = null;
 
@@ -24,7 +31,10 @@ if (url || publishableKey) {
       || target.username || target.password || target.pathname !== '/' || target.search || target.hash) {
     throw Error('JADIS_SUPABASE_URL must be an HTTPS origin or a local HTTP origin.');
   }
-  config = { url: target.origin, publishableKey, externalDirectory: directoryAccess === 'true' };
+  config = {
+    url: target.origin, publishableKey,
+    externalDirectory: directoryAccess === 'true', minimalPilot: minimalPilot === 'true',
+  };
 }
 
 const output = resolve(process.argv[2] ?? 'site');

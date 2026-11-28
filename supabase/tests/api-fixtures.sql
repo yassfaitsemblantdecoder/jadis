@@ -2,8 +2,8 @@ create role jadis_api login noinherit;
 grant anon, authenticated to jadis_api;
 
 insert into auth.users (id, email_confirmed_at)
-select ('00000000-0000-4000-8000-00000000000' || n)::uuid, now()
-from generate_series(1, 6) as n;
+select ('00000000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid, now()
+from generate_series(1, 10) as n;
 
 insert into public.beta_members (user_id)
 select id from auth.users where id <> '00000000-0000-4000-8000-000000000003';

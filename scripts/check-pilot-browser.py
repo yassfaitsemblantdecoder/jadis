@@ -98,14 +98,18 @@ def open_auth_email(page, link, beta_url):
         raise RuntimeError("Mail verification did not return to beta.html with a clean URL") from None
 
 
-def check_export(page, email, nickname, place, memory):
+def download_data(page):
     with page.expect_download() as generated:
         page.locator("#download-data").click()
     download = generated.value
     if download.suggested_filename != "mes-donnees-jadis.json":
         raise RuntimeError("Unexpected account export filename")
     with download.path().open(encoding="utf-8") as contents:
-        data = json.load(contents)
+        return json.load(contents)
+
+
+def check_export(page, email, nickname, place, memory):
+    data = download_data(page)
     timeline = data["timeline"]
     if (data["account"]["email"] != email or data["profile"]["display_name"] != nickname
             or len(timeline) != 1 or timeline[0]["place"] != place):
@@ -118,7 +122,55 @@ def check_export(page, email, nickname, place, memory):
         raise RuntimeError("Export did not contain the expected capsule contribution")
 
 
-def check(origin, email, invite):
+def enter_school_attendance(page):
+    school = page.locator("#pilot-school")
+    expect(school).to_be_visible()
+    for old in ("#journey", "#life-timeline", "#capsules", "#discovery"):
+        expect(page.locator(old)).to_be_hidden()
+    form = school.locator("#pilot-school-form")
+    select = form.locator("[name=institution_id]")
+    option = select.locator("option").filter(has_text="École pilote fictive")
+    expect(option).to_have_count(1)
+    assert not select.locator("option").filter(has_text="École hors pilote fictive").count()
+    institution_id = option.get_attribute("value")
+    select.select_option(institution_id)
+    form.locator("[name=academic_year]").fill("2006")
+    expect(form.locator("[name=discoverable]")).not_to_be_checked()
+    form.get_by_role("button", name="Ajouter à mon parcours").click()
+    entry = school.locator("#pilot-school-entries article")
+    expect(entry).to_contain_text("École pilote fictive")
+    entry.get_by_role("button", name="Activer la découverte").click()
+    expect(entry.get_by_role("button", name="Désactiver la découverte")).to_be_visible()
+    return institution_id
+
+
+def check_school_export(page, email, nickname, institution_id):
+    data = download_data(page)
+    if (data["account"]["email"] != email or data["profile"]["display_name"] != nickname
+            or data["school_attendance"] != [{
+                "institution_id": institution_id, "name": "École pilote fictive",
+                "academic_year": 2006, "discoverable": True,
+            }]):
+        raise RuntimeError("The account export did not include exactly the synthetic school entry")
+    if data["timeline"] or data["my_memories"] or data["school_entries"]:
+        raise RuntimeError("The account export included activity outside the school pilot")
+
+
+def check_school_boundary(page, token):
+    statuses = page.evaluate("""async token => {
+      const headers = {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token};
+      const rpcs = ['beta_timeline', 'beta_capsules', 'beta_search_notices', 'beta_discover'];
+      const checks = rpcs.map(name => fetch('/rest/v1/rpc/' + name, {
+        method: 'POST', headers, body: JSON.stringify(name === 'beta_discover' ? {} : {action: 'list'})
+      }));
+      checks.push(fetch('/rest/v1/beta_school_entries?select=id', {headers}));
+      return (await Promise.all(checks)).map(response => response.status);
+    }""", token)
+    if any(status not in (401, 403, 404) for status in statuses):
+        raise RuntimeError(f"Out-of-scope routes did not all reject the synthetic client: HTTP {statuses}")
+
+
+def check(origin, email, invite, minimal_school):
     fetch = mail_client(origin)
     previous_ids = mail_ids(fetch)
     password = "Jadis-test-" + secrets.token_urlsafe(24)
@@ -193,6 +245,8 @@ def check(origin, email, invite):
             if not accepted:
                 expect(page.locator("#status")).to_contain_text("Requête refusée")
                 expect(page.locator("#private")).to_be_hidden()
+                return None
+            return token.value.json()["access_token"]
 
         def logout():
             page.locator("#logout").click()
@@ -214,43 +268,51 @@ def check(origin, email, invite):
         profile.get_by_role("button", name="Enregistrer mon profil").click()
         expect(page.locator("#status")).to_have_text("Profil enregistré.")
 
-        timeline = page.locator("#timeline-entry")
-        timeline.locator("[name=kind]").select_option("camp")
-        timeline.locator("[name=place]").fill(place)
-        timeline.locator("[name=city]").fill("Commune fictive")
-        timeline.locator("[name=start_year]").fill("2005")
-        timeline.locator("[name=end_year]").fill("2006")
-        timeline.locator("[name=visible]").check()
-        timeline.get_by_role("button", name="Ajouter à ma frise").click()
-        expect(page.locator("#timeline-entries")).to_contain_text(place)
-        search = page.locator("#memory-search")
-        search.locator("[name=year]").fill("2006")
-        search.get_by_role("button", name="Chercher les croisements").click()
-        expect(page.locator("#memory-matches")).to_contain_text("Aucun croisement")
-        search.get_by_role("button", name="Enregistrer cette recherche").click()
-        expect(page.locator("#search-notice-list")).to_contain_text(place)
-        expect(page.locator("#search-notice-list")).to_contain_text("2006")
+        if minimal_school:
+            institution_id = enter_school_attendance(page)
+            logout()
+            token = login(password)
+            expect(profile.locator("[name=name]")).to_have_value(nickname)
+            expect(page.locator("#pilot-school-entries")).to_contain_text("École pilote fictive")
+            check_school_boundary(page, token)
+        else:
+            timeline = page.locator("#timeline-entry")
+            timeline.locator("[name=kind]").select_option("camp")
+            timeline.locator("[name=place]").fill(place)
+            timeline.locator("[name=city]").fill("Commune fictive")
+            timeline.locator("[name=start_year]").fill("2005")
+            timeline.locator("[name=end_year]").fill("2006")
+            timeline.locator("[name=visible]").check()
+            timeline.get_by_role("button", name="Ajouter à ma frise").click()
+            expect(page.locator("#timeline-entries")).to_contain_text(place)
+            search = page.locator("#memory-search")
+            search.locator("[name=year]").fill("2006")
+            search.get_by_role("button", name="Chercher les croisements").click()
+            expect(page.locator("#memory-matches")).to_contain_text("Aucun croisement")
+            search.get_by_role("button", name="Enregistrer cette recherche").click()
+            expect(page.locator("#search-notice-list")).to_contain_text(place)
+            expect(page.locator("#search-notice-list")).to_contain_text("2006")
 
-        capsule = page.locator("#capsule-create")
-        expect(capsule).to_be_visible()
-        capsule.locator("[name=title]").fill(capsule_title)
-        capsule.locator("[name=year]").fill("2006")
-        capsule.get_by_role("button", name="Créer une capsule").click()
-        created_capsule = page.locator("#capsule-list article").filter(has_text=capsule_title)
-        created_capsule.get_by_role("button", name="Ouvrir la capsule").click()
-        post = page.locator("#capsule-post")
-        expect(post).to_be_visible()
-        post.locator("[name=body]").fill(memory)
-        post.get_by_role("button", name="Ajouter le souvenir").click()
-        expect(page.locator("#capsule-archive")).to_contain_text(memory)
+            capsule = page.locator("#capsule-create")
+            expect(capsule).to_be_visible()
+            capsule.locator("[name=title]").fill(capsule_title)
+            capsule.locator("[name=year]").fill("2006")
+            capsule.get_by_role("button", name="Créer une capsule").click()
+            created_capsule = page.locator("#capsule-list article").filter(has_text=capsule_title)
+            created_capsule.get_by_role("button", name="Ouvrir la capsule").click()
+            post = page.locator("#capsule-post")
+            expect(post).to_be_visible()
+            post.locator("[name=body]").fill(memory)
+            post.get_by_role("button", name="Ajouter le souvenir").click()
+            expect(page.locator("#capsule-archive")).to_contain_text(memory)
 
-        logout()
-        login(password)
-        expect(profile.locator("[name=name]")).to_have_value(nickname)
-        expect(page.locator("#timeline-entries")).to_contain_text(place)
-        expect(page.locator("#search-notice-list")).to_contain_text(place)
-        created_capsule.get_by_role("button", name="Ouvrir la capsule").click()
-        expect(page.locator("#capsule-archive")).to_contain_text(memory)
+            logout()
+            login(password)
+            expect(profile.locator("[name=name]")).to_have_value(nickname)
+            expect(page.locator("#timeline-entries")).to_contain_text(place)
+            expect(page.locator("#search-notice-list")).to_contain_text(place)
+            created_capsule.get_by_role("button", name="Ouvrir la capsule").click()
+            expect(page.locator("#capsule-archive")).to_contain_text(memory)
 
         logout()
         previous_ids = mail_ids(fetch)
@@ -269,7 +331,10 @@ def check(origin, email, invite):
         login(password, accepted=False)
         login(new_password)
         expect(profile.locator("[name=name]")).to_have_value(nickname)
-        check_export(page, email, nickname, place, memory)
+        if minimal_school:
+            check_school_export(page, email, nickname, institution_id)
+        else:
+            check_export(page, email, nickname, place, memory)
 
         page.locator("#account-removal summary").click()
         removal = page.locator("#delete-account")
@@ -293,6 +358,7 @@ def main():
     parser.add_argument("base_url", help="Loopback HTTP origin of the pilot gateway")
     parser.add_argument("email", help="A unique address under a reserved .test domain")
     parser.add_argument("invitation", help="Unused invitation code seeded in the disposable database")
+    parser.add_argument("--minimal-school", action="store_true", help="Check the restricted school pilot build")
     args = parser.parse_args()
     origin = urlsplit(args.base_url)
     if (origin.scheme != "http" or origin.hostname not in {"127.0.0.1", "::1", "localhost"}
@@ -300,8 +366,11 @@ def main():
         parser.error("base_url must be a loopback HTTP origin with no credentials or path")
     if not re.fullmatch(r"[^@\s]+@(?:[a-z0-9-]+\.)+test", args.email, re.IGNORECASE):
         parser.error("email must be a synthetic address under .test")
-    check(f"http://{origin.netloc}", args.email, args.invitation)
-    print("Chromium checks passed (signup, email confirmation, invitation, timeline, private search, capsule, recovery, export and account removal).")
+    check(f"http://{origin.netloc}", args.email, args.invitation, args.minimal_school)
+    if args.minimal_school:
+        print("Chromium checks passed (school-only signup, approved catalog, attendance, opt-in, API restrictions, recovery, export and account removal).")
+    else:
+        print("Chromium checks passed (signup, email confirmation, invitation, timeline, private search, capsule, recovery, export and account removal).")
 
 
 if __name__ == "__main__":

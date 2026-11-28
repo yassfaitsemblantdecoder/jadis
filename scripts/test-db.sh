@@ -35,8 +35,8 @@ trap cleanup EXIT
 
 mode="${1:-}"
 case "$mode" in
-  ""|--rest|--auth|--browser) ;;
-  *) printf '%s\n' 'Usage: bash scripts/test-db.sh [--rest | --auth | --browser]' >&2; exit 2 ;;
+  ""|--rest|--auth|--browser|--browser-school) ;;
+  *) printf '%s\n' 'Usage: bash scripts/test-db.sh [--rest | --auth | --browser | --browser-school]' >&2; exit 2 ;;
 esac
 auth_public_url=http://auth:9999
 auth_site_url=http://auth:9999
@@ -44,7 +44,7 @@ auth_return_url=http://auth:9999
 auth_verify_path=/verify
 probe_image=python:3.12-slim@sha256:191083cdf6c7bda8c76158983163ead5d5cf7b77cf3033e805bb0f5296f51b4b
 
-if [[ "$mode" == --browser ]]; then
+if [[ "$mode" == --browser || "$mode" == --browser-school ]]; then
   browser_python="${JADIS_BROWSER_PYTHON:-python3}"
   if [[ -z "${JADIS_BROWSER_PYTHON:-}" ]] && ! "$browser_python" -c 'import playwright.sync_api' 2>/dev/null; then
     playwright_bin="$(command -v playwright || true)"
@@ -63,7 +63,7 @@ if [[ "$mode" == --browser ]]; then
 fi
 
 database_network=(--network none)
-if [[ "$mode" == --rest || "$mode" == --auth || "$mode" == --browser ]]; then
+if [[ "$mode" == --rest || "$mode" == --auth || "$mode" == --browser || "$mode" == --browser-school ]]; then
   network="$(docker network create --internal "jadis-test-$$")"
   database_network=(--network "$network" --network-alias database)
 fi
@@ -150,8 +150,13 @@ run_probe() {
     "$probe_image" python - < "$1"
 }
 
-if [[ "$mode" == --rest || "$mode" == --auth || "$mode" == --browser ]]; then
+if [[ "$mode" == --rest || "$mode" == --auth || "$mode" == --browser || "$mode" == --browser-school ]]; then
   psql < supabase/tests/api-fixtures.sql
+  psql < supabase/tests/pilot-school-fixture.sql
+  if psql < supabase/import/enable_pilot_school_only.sql; then
+    printf '%s\n' 'A database with existing legacy data accepted school-only activation.' >&2
+    exit 1
+  fi
   export PGRST_JWT_SECRET
   PGRST_JWT_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
   api_container="$(start_api postgres)"
@@ -161,7 +166,7 @@ if [[ "$mode" == --rest || "$mode" == --auth || "$mode" == --browser ]]; then
   fi
 fi
 
-if [[ "$mode" == --auth || "$mode" == --browser ]]; then
+if [[ "$mode" == --auth || "$mode" == --browser || "$mode" == --browser-school ]]; then
   docker stop "$api_container" >/dev/null
   api_container=
   docker exec "$container" createdb -U postgres jadis_auth
@@ -199,15 +204,26 @@ if [[ "$mode" == --auth || "$mode" == --browser ]]; then
   fi
   psql -d jadis_auth < supabase/tests/auth-claims.sql
   apply_migrations jadis_auth
+  if [[ "$mode" == --browser-school ]]; then
+    psql -d jadis_auth < supabase/tests/pilot-school-fixture.sql
+    psql -d jadis_auth < supabase/import/enable_pilot_school_only.sql
+  fi
   psql -d jadis_auth <<'SQL'
 insert into jadis_private.invite_codes (code_hash, expires_at)
 values (encode(sha256(convert_to('JADIS-TEST-INVITE', 'UTF8')), 'hex'), now() + interval '1 hour');
 SQL
   api_container="$(start_api jadis_auth)"
-  if [[ "$mode" == --browser ]]; then
+  if [[ "$mode" == --browser || "$mode" == --browser-school ]]; then
     browser_site="$(mktemp -d)"
+    school_build=false
+    school_test=()
+    if [[ "$mode" == --browser-school ]]; then
+      school_build=true
+      school_test=(--minimal-school)
+    fi
     JADIS_SUPABASE_URL="$browser_origin" JADIS_SUPABASE_PUBLISHABLE_KEY=sb_publishable_fixture \
-      JADIS_BETA_EXTERNAL_DIRECTORY=false node scripts/build-site.mjs "$browser_site"
+      JADIS_BETA_EXTERNAL_DIRECTORY=false JADIS_BETA_MINIMAL_PILOT="$school_build" \
+      node scripts/build-site.mjs "$browser_site"
     browser_relay="$(docker run --detach --rm --network "$network" "$probe_image" sleep infinity)"
     env -u PGRST_JWT_SECRET -u GOTRUE_JWT_SECRET \
       python3 scripts/pilot-gateway.py "$browser_port" "$browser_site" "$browser_relay" &
@@ -228,7 +244,7 @@ SQL
       exit 1
     fi
     env -u PGRST_JWT_SECRET -u GOTRUE_JWT_SECRET \
-      "$browser_python" scripts/check-pilot-browser.py "$browser_origin" "recette-ui@example.test" "JADIS-TEST-INVITE"
+      "$browser_python" scripts/check-pilot-browser.py "$browser_origin" "recette-ui@example.test" "JADIS-TEST-INVITE" "${school_test[@]}"
   elif ! run_probe scripts/check-beta-auth.py; then
     docker logs "$auth_container" >&2
     docker logs "$api_container" >&2

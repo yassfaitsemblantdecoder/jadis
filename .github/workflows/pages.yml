@@ -25,6 +25,7 @@ jobs:
           JADIS_SUPABASE_URL: ${{ vars.JADIS_SUPABASE_URL }}
           JADIS_SUPABASE_PUBLISHABLE_KEY: ${{ vars.JADIS_SUPABASE_PUBLISHABLE_KEY }}
           JADIS_BETA_EXTERNAL_DIRECTORY: ${{ vars.JADIS_BETA_EXTERNAL_DIRECTORY }}
+          JADIS_BETA_MINIMAL_PILOT: ${{ vars.JADIS_BETA_MINIMAL_PILOT }}
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:

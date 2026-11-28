@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 
 STATIC_FILES = {
     "index.html", "beta.html", "style.css", "app.js", "beta.js", "beta-config.js",
-    "matching.js", "directory.js", "classes.js", "timeline.js", "capsules.js",
+    "matching.js", "directory.js", "classes.js", "timeline.js", "capsules.js", "pilot-school.js",
 }
 STATIC_TYPES = {
     ".html": "text/html; charset=utf-8",
