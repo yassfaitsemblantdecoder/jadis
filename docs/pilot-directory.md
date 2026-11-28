@@ -41,6 +41,17 @@ Projeter `identifiant_de_l_etablissement,nom_etablissement,nom_commune,type_etab
 
 La prévisualisation vérifie les identifiants canoniques `uai` et `paysage` et signale les anciennes clés de source. Pour les écoles, l’équivalence utilise le nom, le type et le statut du référentiel. La commune n’est pas encore enregistrée dans le modèle canonique. Les homonymes dans une même commune au sein du lot et les divergences restent à revoir. Les établissements fermés ou du supérieur restent à examiner avant leur admission.
 
+## Admettre le minimum
+
+La migration 016 accepte uniquement un lot scolaire prévisualisé et une liste de 1 à 25 UAI explicitement approuvées. Cette limite borne chaque admission au périmètre opérationnel du pilote. Exercer la commande sur des données fictives dans PostgreSQL jetable, avec le rôle propriétaire de la fonction d’admission.
+
+```sql
+select external_id, institution_id, outcome
+from jadis_private.admit_directory_pilot(:'batch_id'::uuid, array['0000001A']);
+```
+
+Une ligne non admissible bloque toute la liste. Un rejeu de la même admission retourne les mêmes identifiants canoniques. Pour une nouvelle institution, seuls le nom, le type et l’UAI entrent au référentiel, avec un lien privé vers le lot d’origine. La commune et le statut servent à la revue dans la préparation. Les équivalences déjà présentes sont retournées sans nouvelle écriture dans le journal. Ce journal trace uniquement les créations, avec leur lot, leur UAI, leur UUID et la date d’admission. Tant qu’une création référence le lot, les clés étrangères empêchent sa purge.
+
 ## Preuves attendues avant bascule
 
 | Essai sur une base jetable | Résultat attendu |
@@ -52,4 +63,4 @@ La prévisualisation vérifie les identifiants canoniques `uai` et `paysage` et 
 | Même établissement avant et après correction de libellé | UUID conservé après validation et nom précédent traité comme alias si la preuve historique le permet. Les parcours existants restent associés au même établissement. |
 | Retour au lot précédent et restauration | Référentiel visible et décomptes conformes au lot précédent. Tout UUID déjà référencé par un parcours est conservé. |
 
-Le dépôt dispose du staging et des tables canoniques privées. Le manifeste d’admission, le mécanisme de promotion et les essais de la table ci-dessus restent à réaliser. La recherche de la bêta utilise actuellement les catalogues depuis le navigateur. Pour un pilote qui utilise le référentiel canonique, vérifier une recherche côté Jadis sur un lot approuvé, sans requête sortante contenant les termes saisis, et préparer un retour à la dernière version approuvée. Le responsable données valide le sous-lot et l’opérateur valide le rejeu et le retour avant activation. [Résultats des sources et staging](directory-source-validation.md) · [Modèle canonique et contrôles](foundation-data-and-controls.md)
+Le dépôt vérifie l’admission minimale, le rejeu et l’atomicité sur une base jetable. Le manifeste approuvé, la gestion des corrections et alias, et l’exercice de retour sur le lot choisi restent à valider. La recherche de la bêta utilise actuellement les catalogues depuis le navigateur. Pour un pilote qui utilise le référentiel canonique, vérifier une recherche côté Jadis sur un lot approuvé, sans requête sortante contenant les termes saisis, et préparer un retour à la dernière version approuvée. Le responsable données valide le sous-lot et l’opérateur valide le rejeu et le retour avant activation. [Résultats des sources et staging](directory-source-validation.md) · [Modèle canonique et contrôles](foundation-data-and-controls.md)

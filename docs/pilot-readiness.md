@@ -4,6 +4,7 @@
 
 - [Sécurité et exploitation](pilot-security.md)
 - [Données et promotion de l’annuaire](pilot-directory.md)
+- [Données minimales du pilote](pilot-minimum-data.md)
 - [Protection des données et modération](pilot-privacy.md)
 - [Recette produit](pilot-product.md)
 - [Pilotage et décision d’ouverture](pilot-plan.md)

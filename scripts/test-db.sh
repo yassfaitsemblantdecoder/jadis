@@ -125,6 +125,7 @@ stage_fixture closed
 stage_fixture higher
 psql < supabase/tests/directory-staging.sql
 psql < supabase/tests/directory-promotion.sql
+psql < supabase/tests/directory-admission.sql
 
 printf 'Restoring and retesting the migrated database
 '
@@ -134,6 +135,7 @@ docker exec "$container" pg_dump -U postgres --no-password postgres |
 psql -d foundation_restore < supabase/tests/foundation.sql
 psql -d foundation_restore < supabase/tests/directory-staging.sql
 psql -d foundation_restore < supabase/tests/directory-promotion.sql
+psql -d foundation_restore < supabase/tests/directory-admission.sql
 
 start_api() {
   local api_image=postgrest/postgrest:v12.2.12@sha256:5f4ce744539bbba786b4e24dbbd95bdb2a956dcf568c5374995a0ff4a68f5bd2
